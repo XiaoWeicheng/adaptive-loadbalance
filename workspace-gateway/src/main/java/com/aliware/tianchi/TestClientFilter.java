@@ -8,28 +8,40 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 
+import java.util.concurrent.ConcurrentHashMap;
+
+import static com.aliware.tianchi.UserLoadBalance.STATUS_MAP;
+
 /**
  * @author daofeng.xjf
  *
- * 客户端过滤器
- * 可选接口
- * 用户可以在客户端拦截请求和响应,捕获 rpc 调用时产生、服务端返回的已知异常。
+ *         客户端过滤器 可选接口 用户可以在客户端拦截请求和响应,捕获 rpc 调用时产生、服务端返回的已知异常。
  */
 @Activate(group = Constants.CONSUMER)
 public class TestClientFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
-        try{
+        try {
             Result result = invoker.invoke(invocation);
+            updateStatus(invoker, true);
             return result;
-        }catch (Exception e){
+        } catch (Exception e) {
+            updateStatus(invoker, false);
             throw e;
         }
-
     }
 
     @Override
     public Result onResponse(Result result, Invoker<?> invoker, Invocation invocation) {
         return result;
+    }
+
+    private void updateStatus(Invoker invoker, boolean status) {
+        ConcurrentHashMap<Invoker, Boolean> invokerBooleanMap = STATUS_MAP.get(invoker.getUrl().toIdentityString());
+        if (null == invokerBooleanMap) {
+            invokerBooleanMap = new ConcurrentHashMap<>(8);
+            STATUS_MAP.putIfAbsent(invoker.getUrl().toIdentityString(), invokerBooleanMap);
+        }
+        invokerBooleanMap.put(invoker, status);
     }
 }
