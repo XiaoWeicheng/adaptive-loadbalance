@@ -7,7 +7,6 @@ import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -18,17 +17,13 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class UserLoadBalance implements LoadBalance {
 
-    static final ConcurrentHashMap<String, ConcurrentHashMap<Invoker, Boolean>> STATUS_MAP = new ConcurrentHashMap<>();
+    static final ConcurrentHashMap<Invoker, Boolean> STATUS_MAP = new ConcurrentHashMap<>();
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
-        ConcurrentHashMap<Invoker, Boolean> invokerBooleanMap = STATUS_MAP.get(url.toIdentityString());
-        if (null == invokerBooleanMap) {
-            invokerBooleanMap = new ConcurrentHashMap<>(invokers.size());
-            STATUS_MAP.putIfAbsent(url.toIdentityString(), invokerBooleanMap);
-        } else if (invokerBooleanMap.size() > 0) {
+        if (STATUS_MAP.size() > 0) {
             for (Invoker<T> invoker : invokers) {
-                Boolean canInvoke = invokerBooleanMap.get(invoker);
+                Boolean canInvoke = STATUS_MAP.get(invoker);
                 if (null == canInvoke || canInvoke) {
                     return invoker;
                 }

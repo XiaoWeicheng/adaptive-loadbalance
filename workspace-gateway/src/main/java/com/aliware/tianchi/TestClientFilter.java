@@ -8,8 +8,6 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import static com.aliware.tianchi.UserLoadBalance.STATUS_MAP;
 
 /**
@@ -37,11 +35,6 @@ public class TestClientFilter implements Filter {
     }
 
     private void updateStatus(Invoker invoker, boolean status) {
-        ConcurrentHashMap<Invoker, Boolean> invokerBooleanMap = STATUS_MAP.get(invoker.getUrl().toIdentityString());
-        if (null == invokerBooleanMap) {
-            invokerBooleanMap = new ConcurrentHashMap<>(8);
-            STATUS_MAP.putIfAbsent(invoker.getUrl().toIdentityString(), invokerBooleanMap);
-        }
-        invokerBooleanMap.put(invoker, status);
+        STATUS_MAP.put(invoker, status);
     }
 }
