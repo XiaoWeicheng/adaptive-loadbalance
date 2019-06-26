@@ -21,12 +21,10 @@ public class UserLoadBalance implements LoadBalance {
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
-        if (STATUS_MAP.size() > 0) {
-            for (Invoker<T> invoker : invokers) {
-                Boolean canInvoke = STATUS_MAP.get(invoker);
-                if (null == canInvoke || canInvoke) {
-                    return invoker;
-                }
+        for (Invoker<T> invoker : invokers) {
+            Boolean canInvoke = STATUS_MAP.get(invoker);
+            if (null == canInvoke || canInvoke) {
+                return invoker;
             }
         }
         return invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
