@@ -6,9 +6,11 @@ import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
+import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
 
-import static com.aliware.tianchi.UserLoadBalance.STATUS_MAP;
+import static com.aliware.tianchi.UserLoadBalance.updateRank;
+import static com.aliware.tianchi.UserLoadBalance.updateStatus;
 
 /**
  * @author daofeng.xjf
@@ -31,10 +33,11 @@ public class TestClientFilter implements Filter {
 
     @Override
     public Result onResponse(Result result, Invoker<?> invoker, Invocation invocation) {
+        Long succeededAverageElapsed=(Long) RpcContext.getServerContext().get("SucceededAverageElapsed");
+        if(succeededAverageElapsed==null){
+            succeededAverageElapsed=0L;
+        }
+        updateRank(invoker,succeededAverageElapsed);
         return result;
-    }
-
-    private void updateStatus(Invoker invoker, boolean status) {
-        STATUS_MAP.put(invoker, status);
     }
 }
