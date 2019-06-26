@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -24,6 +25,7 @@ public class UserLoadBalance implements LoadBalance {
 
     private static final ConcurrentHashMap<String, ConcurrentHashMap<Invoker, Boolean>> STATUS_MAP = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, TreeSet<InvokerRank>> RANK_MAP = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<TreeSet<InvokerRank>, Set<InvokerRank>> SYNCHRONIZED_SET_MAP = new ConcurrentHashMap<>();
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
@@ -31,12 +33,14 @@ public class UserLoadBalance implements LoadBalance {
         ConcurrentHashMap<Invoker, Boolean> invokerBooleanMap = STATUS_MAP.get(urlString);
         if (null != invokerBooleanMap && invokerBooleanMap.size() > 0) {
             TreeSet<InvokerRank> invokerRankSet = RANK_MAP.get(urlString);
-            for (InvokerRank invokerRank : invokerRankSet) {
-                Invoker invoker = invokerRank.invoker;
-                if (invokers.contains(invoker)) {
-                    Boolean canInvoke = invokerBooleanMap.get(invoker);
-                    if (null == canInvoke || canInvoke) {
-                        return invoker;
+            if(invokerRankSet!=null) {
+                for (InvokerRank invokerRank : invokerRankSet) {
+                    Invoker invoker = invokerRank.invoker;
+                    if (invokers.contains(invoker)) {
+                        Boolean canInvoke = invokerBooleanMap.get(invoker);
+                        if (null == canInvoke || canInvoke) {
+                            return invoker;
+                        }
                     }
                 }
             }
@@ -59,11 +63,17 @@ public class UserLoadBalance implements LoadBalance {
         String url = invoker.getUrl().toIdentityString();
         TreeSet<InvokerRank> invokerRankSet = RANK_MAP.get(url);
         if (null == invokerRankSet) {
-            invokerRankSet = (TreeSet<InvokerRank>) Collections.synchronizedSet(new TreeSet<>(InvokerRank.COMPARATOR));
+            invokerRankSet = new TreeSet<>(InvokerRank.COMPARATOR);
             RANK_MAP.putIfAbsent(url, invokerRankSet);
-            RANK_MAP.get(url);
+            invokerRankSet = RANK_MAP.get(url);
         }
-        invokerRankSet.add(new InvokerRank(invoker, rank));
+        Set<InvokerRank> synchronizedSet = SYNCHRONIZED_SET_MAP.get(invokerRankSet);
+        if (null == synchronizedSet) {
+            synchronizedSet = Collections.synchronizedSet(invokerRankSet);
+            SYNCHRONIZED_SET_MAP.putIfAbsent(invokerRankSet, synchronizedSet);
+            synchronizedSet = SYNCHRONIZED_SET_MAP.get(invokerRankSet);
+        }
+        synchronizedSet.add(new InvokerRank(invoker, rank));
     }
 
     private static class InvokerRank {
