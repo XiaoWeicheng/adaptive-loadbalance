@@ -33,7 +33,7 @@ public class TestServerFilter implements Filter {
     @Override
     public Result onResponse(Result result, Invoker<?> invoker, Invocation invocation) {
         RpcStatus status=RpcStatus.getStatus(invoker.getUrl());
-        RpcContext.getServerContext().set("SucceededAverageElapsed",status.getSucceededAverageElapsed());
+        RpcContext.getContext().set("SucceededAverageElapsed",status.getSucceededAverageElapsed());
         return result;
     }
 

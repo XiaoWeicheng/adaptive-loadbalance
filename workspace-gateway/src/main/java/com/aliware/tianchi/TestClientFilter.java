@@ -33,7 +33,7 @@ public class TestClientFilter implements Filter {
 
     @Override
     public Result onResponse(Result result, Invoker<?> invoker, Invocation invocation) {
-        Long succeededAverageElapsed=(Long) RpcContext.getServerContext().get("SucceededAverageElapsed");
+        Long succeededAverageElapsed=(Long) RpcContext.getContext().get("SucceededAverageElapsed");
         if(succeededAverageElapsed==null){
             succeededAverageElapsed=0L;
         }
