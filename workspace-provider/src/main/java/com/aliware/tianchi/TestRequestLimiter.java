@@ -7,9 +7,10 @@ import org.apache.dubbo.remoting.exchange.Request;
 import org.apache.dubbo.remoting.transport.RequestLimiter;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -20,8 +21,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class TestRequestLimiter implements RequestLimiter {
 
-    private static final ConcurrentHashMap<String, Integer> CAN_ACCEPT_MAP = new ConcurrentHashMap<>();
+    private static final Logger LOGGER = LoggerFactory.getLogger(TestRequestLimiter.class);
 
+    private static final ConcurrentHashMap<String, Integer> CAN_ACCEPT_MAP = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, AtomicInteger> ACCEPTED_MAP = new ConcurrentHashMap<>();
 
     /**
@@ -31,11 +33,12 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
+        URL url = RpcContext.getContext().getUrl();
+        String urlString = url.toIdentityString();
         if (activeTaskCount > 0) {
             return true;
         }
-        URL url = RpcContext.getContext().getUrl();
-        String urlString = url.toIdentityString();
+        LOGGER.info("限流 url={} activeTaskCount={}", urlString, activeTaskCount);
         Integer canAccept = CAN_ACCEPT_MAP.get(urlString);
         if (null == canAccept) {
             canAccept = ((ThreadPoolExecutor) ExtensionLoader.getExtensionLoader(ThreadPool.class)
@@ -49,12 +52,27 @@ public class TestRequestLimiter implements RequestLimiter {
             ACCEPTED_MAP.putIfAbsent(urlString, accepted);
             accepted = ACCEPTED_MAP.get(urlString);
         }
+        LOGGER.info("限流 url={} canAccept={} accepted={}", urlString, canAccept, accepted.get());
         if (accepted.get() < canAccept) {
             accepted.incrementAndGet();
             return true;
         }
 
         return false;
+    }
+
+    static void reduceAccepted(Invoker invoker){
+        String url=invoker.getUrl().toIdentityString();
+        AtomicInteger accepted = ACCEPTED_MAP.get(url);
+        if (null == accepted) {
+            accepted = new AtomicInteger(0);
+            ACCEPTED_MAP.putIfAbsent(url, accepted);
+            accepted = ACCEPTED_MAP.get(url);
+        }
+        LOGGER.info("更新限流 url={} accepted={}", url, accepted.get());
+        if (accepted.get() > 0) {
+            accepted.decrementAndGet();
+        }
     }
 
 }
