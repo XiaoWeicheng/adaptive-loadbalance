@@ -27,7 +27,7 @@ public class UserLoadBalance implements LoadBalance {
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
         LOGGER.info("状态 status={}", JsonUtil.toJson(STATUS_MAP));
-        Class interfaceClass = invocation.getInvoker().getInterface();
+        Class interfaceClass = invokers.get(0).getInterface();
         ConcurrentHashMap<String, Boolean> hostStatus = STATUS_MAP.get(interfaceClass);
         if (null == hostStatus) {
             hostStatus = new ConcurrentHashMap<>((invokers.size() / 3 + 1) * 4);
