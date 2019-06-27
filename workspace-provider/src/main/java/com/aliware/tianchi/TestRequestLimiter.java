@@ -31,24 +31,23 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
-        // LOGGER.info("限流 activeTaskCount={}", activeTaskCount);
-        // if (activeTaskCount > 0) {
-        // return true;
-        // }
-        // URL url = RpcContext.getContext().getUrl();
-        // String urlString = url.toIdentityString();
-        // if (0 == CAN_ACCEPT) {
-        // CAN_ACCEPT = ((ThreadPoolExecutor) ExtensionLoader.getExtensionLoader(ThreadPool.class)
-        // .getAdaptiveExtension().getExecutor(url)).getMaximumPoolSize() / 10 + 1;
-        // }
-        //
-        // LOGGER.info("限流 CAN_ACCEPT={} ACCEPTED={}", urlString, CAN_ACCEPT, ACCEPTED.get());
-        // if (ACCEPTED.get() < CAN_ACCEPT) {
-        // ACCEPTED.incrementAndGet();
-        // return true;
-        // }
+        LOGGER.info("限流 activeTaskCount={}", activeTaskCount);
+        if (activeTaskCount > 0) {
+            return true;
+        }
+        URL url = RpcContext.getContext().getUrl();
+        String urlString = url.toIdentityString();
+        if (0 == CAN_ACCEPT) {
+            CAN_ACCEPT = ((ThreadPoolExecutor) ExtensionLoader.getExtensionLoader(ThreadPool.class)
+                    .getAdaptiveExtension().getExecutor(url)).getMaximumPoolSize() / 10 + 1;
+        }
 
-        return activeTaskCount > 0;
+        LOGGER.info("限流 CAN_ACCEPT={} ACCEPTED={}", urlString, CAN_ACCEPT, ACCEPTED.get());
+        if (ACCEPTED.get() < CAN_ACCEPT) {
+            ACCEPTED.incrementAndGet();
+            return true;
+        }
+        return false;
     }
 
     static void reduceAccepted() {

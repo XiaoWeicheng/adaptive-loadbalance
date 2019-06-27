@@ -26,22 +26,22 @@ public class UserLoadBalance implements LoadBalance {
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
-        LOGGER.info("状态 status={}", JsonUtil.toJson(STATUS_MAP));
-        Class interfaceClass = invokers.get(0).getInterface();
-        ConcurrentHashMap<String, Boolean> hostStatus = STATUS_MAP.get(interfaceClass);
-        if (null == hostStatus) {
-            hostStatus = new ConcurrentHashMap<>((invokers.size() / 3 + 1) * 4);
-            STATUS_MAP.putIfAbsent(interfaceClass, hostStatus);
-            hostStatus = STATUS_MAP.get(interfaceClass);
-        }
-        for (Invoker<T> invoker : invokers) {
-            URL oneUrl = invoker.getUrl();
-            String hostPort = oneUrl.getHost() + ":" + oneUrl.getPort();
-            Boolean status = hostStatus.get(hostPort);
-            if (null == status || status) {
-                return invoker;
-            }
-        }
+//        LOGGER.info("状态 status={}", JsonUtil.toJson(STATUS_MAP));
+//        Class interfaceClass = invokers.get(0).getInterface();
+//        ConcurrentHashMap<String, Boolean> hostStatus = STATUS_MAP.get(interfaceClass);
+//        if (null == hostStatus) {
+//            hostStatus = new ConcurrentHashMap<>((invokers.size() / 3 + 1) * 4);
+//            STATUS_MAP.putIfAbsent(interfaceClass, hostStatus);
+//            hostStatus = STATUS_MAP.get(interfaceClass);
+//        }
+//        for (Invoker<T> invoker : invokers) {
+//            URL oneUrl = invoker.getUrl();
+//            String hostPort = oneUrl.getHost() + ":" + oneUrl.getPort();
+//            Boolean status = hostStatus.get(hostPort);
+//            if (null == status || status) {
+//                return invoker;
+//            }
+//        }
         return invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
     }
 
