@@ -3,6 +3,7 @@ package com.aliware.tianchi;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
+import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.slf4j.Logger;
@@ -21,27 +22,41 @@ public class UserLoadBalance implements LoadBalance {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(UserLoadBalance.class);
 
-    private static final ConcurrentHashMap<String, Boolean> STATUS_MAP = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class, ConcurrentHashMap<String, Boolean>> STATUS_MAP = new ConcurrentHashMap<>();
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
         LOGGER.info("状态 status={}", JsonUtil.toJson(STATUS_MAP));
+        Class interfaceClass = invocation.getInvoker().getInterface();
+        ConcurrentHashMap<String, Boolean> hostStatus = STATUS_MAP.get(interfaceClass);
+        if (null == hostStatus) {
+            hostStatus = new ConcurrentHashMap<>((invokers.size() / 3 + 1) * 4);
+            STATUS_MAP.putIfAbsent(interfaceClass, hostStatus);
+            hostStatus = STATUS_MAP.get(interfaceClass);
+        }
         for (Invoker<T> invoker : invokers) {
-            URL oneUrl=invoker.getUrl();
-            String hostPort = oneUrl.getHost()+":"+oneUrl.getPort();
-            Boolean status=STATUS_MAP.get(hostPort);
-            if (null==status || status) {
-                    return invoker;
+            URL oneUrl = invoker.getUrl();
+            String hostPort = oneUrl.getHost() + ":" + oneUrl.getPort();
+            Boolean status = hostStatus.get(hostPort);
+            if (null == status || status) {
+                return invoker;
             }
         }
         return invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
     }
 
     static void updateStatus(Invoker invoker, boolean status) {
-        URL url=invoker.getUrl();
-        String hostPort = url.getHost()+":"+url.getPort();
+        Class interfaceClass = invoker.getInterface();
+        ConcurrentHashMap<String, Boolean> hostStatus = STATUS_MAP.get(interfaceClass);
+        if (null == hostStatus) {
+            hostStatus = new ConcurrentHashMap<>((RpcContext.getContext().getInvokers().size() / 3 + 1) * 4);
+            STATUS_MAP.putIfAbsent(interfaceClass, hostStatus);
+            hostStatus = STATUS_MAP.get(interfaceClass);
+        }
+        URL url = invoker.getUrl();
+        String hostPort = url.getHost() + ":" + url.getPort();
         LOGGER.info("更新 hostPort={} 状态 status={}", hostPort, status);
-        STATUS_MAP.put(hostPort, status);
+        hostStatus.put(hostPort, status);
     }
 
 }
