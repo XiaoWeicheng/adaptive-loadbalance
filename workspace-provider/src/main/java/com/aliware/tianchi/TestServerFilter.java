@@ -26,7 +26,7 @@ public class TestServerFilter implements Filter {
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
         try {
             Result result = invoker.invoke(invocation);
-//            reduceAccepted();
+            reduceAccepted();
             return result;
         } catch (Exception e) {
             throw e;
