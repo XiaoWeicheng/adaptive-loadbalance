@@ -5,12 +5,10 @@ import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.threadpool.ThreadPool;
 import org.apache.dubbo.remoting.exchange.Request;
 import org.apache.dubbo.remoting.transport.RequestLimiter;
-import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -23,8 +21,8 @@ public class TestRequestLimiter implements RequestLimiter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TestRequestLimiter.class);
 
-    private static final ConcurrentHashMap<String, Integer> CAN_ACCEPT_MAP = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, AtomicInteger> ACCEPTED_MAP = new ConcurrentHashMap<>();
+    private static int CAN_ACCEPT = 0;
+    private static final AtomicInteger ACCEPTED = new AtomicInteger();
 
     /**
      * @param request 服务请求
@@ -33,45 +31,30 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
-        URL url = RpcContext.getContext().getUrl();
-        String urlString = url.toIdentityString();
-        if (activeTaskCount > 0) {
-            return true;
-        }
-        LOGGER.info("限流 url={} activeTaskCount={}", urlString, activeTaskCount);
-        Integer canAccept = CAN_ACCEPT_MAP.get(urlString);
-        if (null == canAccept) {
-            canAccept = ((ThreadPoolExecutor) ExtensionLoader.getExtensionLoader(ThreadPool.class)
-                    .getAdaptiveExtension().getExecutor(url)).getMaximumPoolSize();
-            CAN_ACCEPT_MAP.putIfAbsent(urlString, canAccept / 10);
-            canAccept = CAN_ACCEPT_MAP.get(urlString);
-        }
-        AtomicInteger accepted = ACCEPTED_MAP.get(urlString);
-        if (null == accepted) {
-            accepted = new AtomicInteger(0);
-            ACCEPTED_MAP.putIfAbsent(urlString, accepted);
-            accepted = ACCEPTED_MAP.get(urlString);
-        }
-        LOGGER.info("限流 url={} canAccept={} accepted={}", urlString, canAccept, accepted.get());
-        if (accepted.get() < canAccept) {
-            accepted.incrementAndGet();
-            return true;
-        }
+        // LOGGER.info("限流 activeTaskCount={}", activeTaskCount);
+        // if (activeTaskCount > 0) {
+        // return true;
+        // }
+        // URL url = RpcContext.getContext().getUrl();
+        // String urlString = url.toIdentityString();
+        // if (0 == CAN_ACCEPT) {
+        // CAN_ACCEPT = ((ThreadPoolExecutor) ExtensionLoader.getExtensionLoader(ThreadPool.class)
+        // .getAdaptiveExtension().getExecutor(url)).getMaximumPoolSize() / 10 + 1;
+        // }
+        //
+        // LOGGER.info("限流 CAN_ACCEPT={} ACCEPTED={}", urlString, CAN_ACCEPT, ACCEPTED.get());
+        // if (ACCEPTED.get() < CAN_ACCEPT) {
+        // ACCEPTED.incrementAndGet();
+        // return true;
+        // }
 
-        return false;
+        return activeTaskCount > 0;
     }
 
-    static void reduceAccepted(Invoker invoker){
-        String url=invoker.getUrl().toIdentityString();
-        AtomicInteger accepted = ACCEPTED_MAP.get(url);
-        if (null == accepted) {
-            accepted = new AtomicInteger(0);
-            ACCEPTED_MAP.putIfAbsent(url, accepted);
-            accepted = ACCEPTED_MAP.get(url);
-        }
-        LOGGER.info("更新限流 url={} accepted={}", url, accepted.get());
-        if (accepted.get() > 0) {
-            accepted.decrementAndGet();
+    static void reduceAccepted() {
+        if (ACCEPTED.get() > 0) {
+            int accepted = ACCEPTED.decrementAndGet();
+            LOGGER.info("更新限流 ACCEPTED={}", accepted);
         }
     }
 

@@ -1,18 +1,15 @@
 package com.aliware.tianchi;
 
-import com.google.gson.Gson;
 import org.apache.dubbo.common.Constants;
 import org.apache.dubbo.common.extension.Activate;
 import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-//import static com.aliware.tianchi.UserLoadBalance.updateRank;
 import static com.aliware.tianchi.UserLoadBalance.updateStatus;
 
 /**
@@ -30,13 +27,6 @@ public class TestClientFilter implements Filter {
         try {
             Result result = invoker.invoke(invocation);
             updateStatus(invoker, true);
-            LOGGER.info("context={} serverContext={}", JsonUtil.toJson(RpcContext.getContext().get()),
-                    JsonUtil.toJson(RpcContext.getServerContext().get()));
-//            Long succeededAverageElapsed = (Long) RpcContext.getContext().get("SucceededAverageElapsed");
-//            if (succeededAverageElapsed == null) {
-//                succeededAverageElapsed = 0L;
-//            }
-//            updateRank(invoker, succeededAverageElapsed);
             return result;
         } catch (Exception e) {
             updateStatus(invoker, false);

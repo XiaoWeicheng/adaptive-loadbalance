@@ -6,9 +6,7 @@ import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.RpcStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,14 +25,8 @@ public class TestServerFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
         try {
-            long start=System.currentTimeMillis();
             Result result = invoker.invoke(invocation);
-            reduceAccepted(invoker);
-            RpcStatus status = RpcStatus.getStatus(invoker.getUrl());
-            RpcContext.getContext().set("SucceededAverageElapsed", status.getSucceededAverageElapsed());
-            LOGGER.info("context={} serverContext={}", JsonUtil.toJson(RpcContext.getContext().get()),
-                    JsonUtil.toJson(RpcContext.getServerContext().get()));
-            LOGGER.info("Elapsed={}", System.currentTimeMillis()-start);
+//            reduceAccepted(invoker);
             return result;
         } catch (Exception e) {
             throw e;
