@@ -1,15 +1,11 @@
 package com.aliware.tianchi;
 
-import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.common.threadpool.ThreadPool;
 import org.apache.dubbo.remoting.exchange.Request;
 import org.apache.dubbo.remoting.transport.RequestLimiter;
-import org.apache.dubbo.rpc.RpcContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -21,7 +17,7 @@ public class TestRequestLimiter implements RequestLimiter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TestRequestLimiter.class);
 
-    private static int CAN_ACCEPT = 0;
+    private static final AtomicInteger CAN_ACCEPT = new AtomicInteger();
     private static final AtomicInteger ACCEPTED = new AtomicInteger();
 
     /**
@@ -31,19 +27,21 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
-        LOGGER.info("限流 activeTaskCount={}", activeTaskCount);
+        int flag = ThreadLocalRandom.current().nextInt();
+        LOGGER.info("{}限流 activeTaskCount={}", flag, activeTaskCount);
+
         if (activeTaskCount > 0) {
             return true;
         }
-        URL url = RpcContext.getContext().getUrl();
-        String urlString = url.toIdentityString();
-        if (0 == CAN_ACCEPT) {
-            CAN_ACCEPT = ((ThreadPoolExecutor) ExtensionLoader.getExtensionLoader(ThreadPool.class)
-                    .getAdaptiveExtension().getExecutor(url)).getMaximumPoolSize() / 10 + 1;
+
+        if (0 == CAN_ACCEPT.get() || CAN_ACCEPT.get() < activeTaskCount / 2 + 1) {
+            synchronized (CAN_ACCEPT) {
+                CAN_ACCEPT.getAndUpdate(operand -> activeTaskCount / 2 + 1) ;
+            }
         }
 
-        LOGGER.info("限流 CAN_ACCEPT={} ACCEPTED={}", urlString, CAN_ACCEPT, ACCEPTED.get());
-        if (ACCEPTED.get() < CAN_ACCEPT) {
+        LOGGER.info("{}限流 CAN_ACCEPT={} ACCEPTED={}", flag, CAN_ACCEPT, ACCEPTED.get());
+        if (ACCEPTED.get() < CAN_ACCEPT.get()) {
             ACCEPTED.incrementAndGet();
             return true;
         }
