@@ -1,5 +1,9 @@
 package com.aliware.tianchi;
 
+import org.apache.dubbo.common.Constants;
+import org.apache.dubbo.config.ProtocolConfig;
+import org.apache.dubbo.config.context.ConfigManager;
+import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.listener.CallbackListener;
 import org.apache.dubbo.rpc.service.CallbackService;
 
@@ -8,6 +12,8 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.aliware.tianchi.TestRequestLimiter.getCanAccept;
 
 /**
  * @author daofeng.xjf
@@ -19,20 +25,20 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CallbackServiceImpl implements CallbackService {
 
     public CallbackServiceImpl() {
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                if (!listeners.isEmpty()) {
-                    for (Map.Entry<String, CallbackListener> entry : listeners.entrySet()) {
-                        try {
-                            entry.getValue().receiveServerMsg(System.getProperty("quota") + " " + new Date().toString());
-                        } catch (Throwable t1) {
-                            listeners.remove(entry.getKey());
-                        }
-                    }
-                }
-            }
-        }, 0, 5000);
+//        timer.schedule(new TimerTask() {
+//            @Override
+//            public void run() {
+//                if (!listeners.isEmpty()) {
+//                    for (Map.Entry<String, CallbackListener> entry : listeners.entrySet()) {
+//                        try {
+//                            entry.getValue().receiveServerMsg(System.getProperty("quota") + " " + new Date().toString());
+//                        } catch (Throwable t1) {
+//                            listeners.remove(entry.getKey());
+//                        }
+//                    }
+//                }
+//            }
+//        }, 0, 5000);
     }
 
     private Timer timer = new Timer();
@@ -45,7 +51,9 @@ public class CallbackServiceImpl implements CallbackService {
 
     @Override
     public void addListener(String key, CallbackListener listener) {
-        listeners.put(key, listener);
-        listener.receiveServerMsg(new Date().toString()); // send notification for change
+//        listeners.put(key, listener);
+        RpcContext context = RpcContext.getContext();
+        RpcContext serverContext = RpcContext.getServerContext();
+        listener.receiveServerMsg(getCanAccept() + " : context { localAddress="+context.getLocalAddressString()+",remoteAddress="+context.getRemoteAddressString() + " } serverContext { localAddress="+serverContext.getLocalAddressString()+",remoteAddress="+serverContext.getRemoteAddressString()+" }"); // send notification for change
     }
 }

@@ -38,12 +38,8 @@ public class TestRequestLimiter implements RequestLimiter {
         boolean ret = false;
         int flag = ThreadLocalRandom.current().nextInt();
         try {
-            if (0 == CAN_ACCEPT) {
-                CAN_ACCEPT = ConfigManager.getInstance().getProtocols().values().stream().filter(protocolConfig -> Constants.DUBBO.equals(protocolConfig.getName())).map(ProtocolConfig::getThreads).max(Integer::compareTo).orElse(0);
-            }
-
-            LOGGER.info("{}限流 CAN_ACCEPT={} ACCEPTED={}", flag, CAN_ACCEPT, ACCEPTED.get());
-            if (ACCEPTED.get() < CAN_ACCEPT) {
+            LOGGER.info("{}限流 CAN_ACCEPT={} ACCEPTED={}", flag, getCanAccept(), ACCEPTED.get());
+            if (ACCEPTED.get() < getCanAccept()) {
                 ACCEPTED.incrementAndGet();
                 ret = true;
             }
@@ -55,9 +51,15 @@ public class TestRequestLimiter implements RequestLimiter {
 
     static void reduceAccepted() {
         if (ACCEPTED.get() > 0) {
-            int accepted = ACCEPTED.decrementAndGet();
-            LOGGER.info("更新限流 ACCEPTED={}", accepted);
+            ACCEPTED.decrementAndGet();
         }
+    }
+
+    static int getCanAccept(){
+        if (0 == CAN_ACCEPT) {
+            CAN_ACCEPT = ConfigManager.getInstance().getProtocols().values().stream().filter(protocolConfig -> Constants.DUBBO.equals(protocolConfig.getName())).map(ProtocolConfig::getThreads).max(Integer::compareTo).orElse(0);
+        }
+        return CAN_ACCEPT;
     }
 
 }

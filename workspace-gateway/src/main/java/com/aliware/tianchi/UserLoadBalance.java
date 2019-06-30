@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -22,7 +23,9 @@ public class UserLoadBalance implements LoadBalance {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(UserLoadBalance.class);
 
-    private static final ConcurrentHashMap<Class, ConcurrentHashMap<String, Boolean>> STATUS_MAP = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, ConcurrentHashMap<String, Boolean>> STATUS_MAP = new ConcurrentHashMap<>();
+    private static final TreeMap<String,Integer>HOST_PORT_THREADS_MAP
+    private static final ConcurrentHashMap<String, Integer> HOST_PORT_THREADS_MAP = new ConcurrentHashMap<>();
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
