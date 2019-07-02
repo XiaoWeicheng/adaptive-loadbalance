@@ -10,6 +10,8 @@ import org.apache.dubbo.rpc.RpcException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.aliware.tianchi.UserLoadBalance.updateStatus;
+
 /**
  * @author daofeng.xjf
  *
@@ -24,10 +26,10 @@ public class TestClientFilter implements Filter {
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
         try {
             Result result = invoker.invoke(invocation);
-//            updateStatus(invoker, true);
+            updateStatus(invoker, true);
             return result;
         } catch (Exception e) {
-//            updateStatus(invoker, false);
+            updateStatus(invoker, false);
             throw e;
         }
     }
