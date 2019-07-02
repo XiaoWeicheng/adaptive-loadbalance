@@ -7,10 +7,11 @@ import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.service.CallbackService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.aliware.tianchi.UserLoadBalance.updateStatus;
+import static com.aliware.tianchi.UserLoadBalance.updateInvoked;
 
 /**
  * @author daofeng.xjf
@@ -24,13 +25,20 @@ public class TestClientFilter implements Filter {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        long start = System.currentTimeMillis();
         try {
             Result result = invoker.invoke(invocation);
-            updateStatus(invoker, true);
+            if (!invocation.getInvoker().getInterface().equals(CallbackService.class)) {
+                updateInvoked(invoker);
+            }
             return result;
-        } catch (Exception e) {
-            updateStatus(invoker, false);
+        } catch (RpcException e) {
+            if (!invocation.getInvoker().getInterface().equals(CallbackService.class)) {
+                updateInvoked(invoker);
+            }
             throw e;
+        } finally {
+            LOGGER.info("Invoke Cost:" + (System.currentTimeMillis() - start));
         }
     }
 

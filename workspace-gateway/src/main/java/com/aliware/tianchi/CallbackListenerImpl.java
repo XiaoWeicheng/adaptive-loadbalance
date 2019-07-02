@@ -5,7 +5,7 @@ import org.apache.dubbo.rpc.listener.CallbackListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.aliware.tianchi.UserLoadBalance.updateRank;
+import static com.aliware.tianchi.UserLoadBalance.updateCallBack;
 
 /**
  * @author daofeng.xjf
@@ -20,7 +20,7 @@ public class CallbackListenerImpl implements CallbackListener {
     public void receiveServerMsg(String msg) {
         LOGGER.info("receive msg from server :{}", msg);
         String hostPort = RpcContext.getContext().getRemoteAddressString();
-        updateRank(hostPort, Integer.parseInt(msg));
+        updateCallBack(hostPort, Integer.parseInt(msg));
     }
 
 }

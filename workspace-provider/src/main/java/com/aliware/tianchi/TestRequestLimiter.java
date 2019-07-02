@@ -30,18 +30,23 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
-        boolean ret = false;
+//        long start=System.currentTimeMillis();
+        try {
+            boolean ret = false;
         int flag = ThreadLocalRandom.current().nextInt();
         try {
-            LOGGER.info("{}限流 CAN_ACCEPT={} ACCEPTED={}", flag, getCanAccept(), ACCEPTED.get());
+//            LOGGER.info("{}限流 CAN_ACCEPT={} ACCEPTED={}", flag, getCanAccept(), ACCEPTED.get());
             if (ACCEPTED.get() < getCanAccept()) {
                 ACCEPTED.incrementAndGet();
                 ret = true;
             }
         } finally {
-            LOGGER.info("{}限流 ret={}", flag, ret);
+//            LOGGER.info("{}限流 ret={}", flag, ret);
         }
         return ret;
+        }finally {
+//            LOGGER.info("Try Acquire Cost:"+(System.currentTimeMillis()-start));
+        }
     }
 
     static void reduceAccepted() {
