@@ -19,8 +19,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author daofeng.xjf
@@ -32,9 +31,10 @@ public class UserLoadBalance implements LoadBalance {
     private static final Logger LOGGER = LoggerFactory.getLogger(UserLoadBalance.class);
     private static final Map<String, Rank> RANK_MAP = new ConcurrentHashMap<>();
     private static final Set<String> INVOKED = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private static final ReadWriteLock LOCK = new ReentrantReadWriteLock();
-    private static final Lock READ_LOCK=LOCK.readLock();
-    private static final Lock WRITE_LOCK=LOCK.writeLock();
+    private static final Lock LOCK = new ReentrantLock();
+    // private static final ReadWriteLock LOCK = new ReentrantReadWriteLock();
+    // private static final Lock READ_LOCK=LOCK.readLock();
+    // private static final Lock WRITE_LOCK=LOCK.writeLock();
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
@@ -48,22 +48,22 @@ public class UserLoadBalance implements LoadBalance {
                 hostPortSet.add(hostPort);
             });
             Invoker<T> selectedInvoker = null;
-            LOGGER.info("排名 RANK_MAP={} hostPortSet={}", JsonUtil.toJson(RANK_MAP), JsonUtil.toJson(hostPortSet));
+//            LOGGER.info("排名 RANK_MAP={} hostPortSet={}", JsonUtil.toJson(RANK_MAP), JsonUtil.toJson(hostPortSet));
             if (RANK_MAP.keySet().containsAll(hostPortSet)) {
-                READ_LOCK.lock();
+                LOCK.lock();
                 String hostPort = RANK_MAP.values().stream().min(Rank.comparator).map(Rank::getHostPort).orElse(null);
-                READ_LOCK.unlock();
+                LOCK.unlock();
                 selectedInvoker = hosPortInvoker.get(hostPort);
-                LOGGER.info("排名选择 {} selectedInvoker!=null?{}", hostPort, null != selectedInvoker);
+//                LOGGER.info("排名选择 {} selectedInvoker!=null?{}", hostPort, null != selectedInvoker);
             }
             if (null == selectedInvoker) {
                 selectedInvoker = hosPortInvoker.get(
                         hostPortSet.stream().filter(hostPort -> !INVOKED.contains(hostPort)).findAny().orElse(null));
                 if (null == selectedInvoker) {
                     selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
-                }else {
+                } /*else {
                     LOGGER.info("随机轮询 {}", selectedInvoker.getUrl().getAddress());
-                }
+                }*/
             }
             INVOKED.add(selectedInvoker.getUrl().getAddress());
             if (INVOKED.size() >= invokers.size()) {
@@ -72,15 +72,18 @@ public class UserLoadBalance implements LoadBalance {
             updateSelected(selectedInvoker.getUrl().getAddress());
             return selectedInvoker;
         } finally {
-//            LOGGER.info("Select Invoker Cost:" + (System.currentTimeMillis() - start));
+            // LOGGER.info("Select Invoker Cost:" + (System.currentTimeMillis() - start));
         }
     }
 
     static void updateException(Invoker invoker) {
+//        LOGGER.info("异常更新");
         updateThreads(invoker.getUrl().getAddress());
+        updateInvoked(invoker.getUrl().getAddress());
     }
 
     static void updateInvoked(Invoker invoker) {
+//        LOGGER.info("调用完成更新");
         updateInvoked(invoker.getUrl().getAddress());
     }
 
@@ -114,28 +117,28 @@ public class UserLoadBalance implements LoadBalance {
 
         Rank(String hostPort) {
             this.hostPort = hostPort;
-            status=true;
+            status = true;
         }
 
         private void setThreads() {
-            WRITE_LOCK.lock();
+            LOCK.lock();
             threads -= free;
             free = 0;
             status = false;
-            WRITE_LOCK.unlock();
+            LOCK.unlock();
         }
 
         private void selected() {
-            WRITE_LOCK.lock();
+            LOCK.lock();
             --free;
-            WRITE_LOCK.unlock();
+            LOCK.unlock();
         }
 
         private void invoked() {
-            WRITE_LOCK.lock();
+            LOCK.lock();
             ++free;
             status = true;
-            WRITE_LOCK.unlock();
+            LOCK.unlock();
         }
 
         @Override
@@ -177,8 +180,8 @@ public class UserLoadBalance implements LoadBalance {
                 if (null == o2) {
                     return -1;
                 }
-                int statusRes =Boolean.compare(o2.status,o1.status );
-                if(statusRes != 0){
+                int statusRes = Boolean.compare(o2.status, o1.status);
+                if (statusRes != 0) {
                     return statusRes;
                 }
                 int freeRes = Integer.compare(o2.free, o1.free);
