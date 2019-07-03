@@ -11,6 +11,7 @@ import org.apache.dubbo.rpc.service.CallbackService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.aliware.tianchi.UserLoadBalance.updateException;
 import static com.aliware.tianchi.UserLoadBalance.updateInvoked;
 
 /**
@@ -28,17 +29,16 @@ public class TestClientFilter implements Filter {
         long start = System.currentTimeMillis();
         try {
             Result result = invoker.invoke(invocation);
-            if (!invocation.getInvoker().getInterface().equals(CallbackService.class)) {
-                updateInvoked(invoker);
-            }
             return result;
-        } catch (RpcException e) {
-            if (!invocation.getInvoker().getInterface().equals(CallbackService.class)) {
-                updateInvoked(invoker);
+        } catch (Exception e){
+            if(!invoker.getInterface().equals(CallbackService.class)) {
+                updateException(invoker);
             }
             throw e;
-        } finally {
-            LOGGER.info("Invoke Cost:" + (System.currentTimeMillis() - start));
+        }
+        finally {
+            updateInvoked(invoker);
+            LOGGER.info("Invoke Cost:" + (System.currentTimeMillis() - start)+"Interface="+invoker.getInterface());
         }
     }
 
