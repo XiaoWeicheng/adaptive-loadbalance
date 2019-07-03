@@ -27,7 +27,7 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <mainClass>com.aliware.tianchi.Test</mainClass>
+                            <Main-Class>com.aliware.tianchi.Agent</Main-Class>
                             <Agent-Class>com.aliware.tianchi.Agent</Agent-Class>
                             <Can-Redefine-Classes>true</Can-Redefine-Classes>
                             <Can-Retransform-Classes>true</Can-Retransform-Classes>

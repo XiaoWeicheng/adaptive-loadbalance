@@ -17,7 +17,7 @@ import java.security.ProtectionDomain;
  */
 public class Agent {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Agent.class);
+//    private static final Logger LOGGER = LoggerFactory.getLogger(Agent.class);
     private static final String CLASS_NAME="com.aliware.tianchi.Test";
 
     static {
@@ -33,7 +33,7 @@ public class Agent {
     private static class ResponseCallbackClassFileTransformer implements ClassFileTransformer {
 
         @Override
-        public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
+        public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) {
             System.out.println("动态注入 "+className);
             String classNamePoint=className.replaceAll("/", ".");
             if(CLASS_NAME.equals(className)) {
@@ -47,10 +47,15 @@ public class Agent {
                     }
                     return ctClass.toBytecode();
                 } catch (Exception e) {
-                    LOGGER.info("动态注入异常 {}",className,e);
+//                    LOGGER.info("动态注入异常 {}",className,e);
                 }
             }
             return null;
         }
+    }
+
+    public static void main(String[] args) {
+        Test test=new Test();
+        test.test();
     }
 }
