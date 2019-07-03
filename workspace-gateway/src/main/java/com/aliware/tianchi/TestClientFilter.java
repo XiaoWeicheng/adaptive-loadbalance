@@ -38,7 +38,7 @@ public class TestClientFilter implements Filter {
         }
         finally {
             updateInvoked(invoker);
-            LOGGER.info("Invoke Cost:" + (System.currentTimeMillis() - start)+"Interface="+invoker.getInterface());
+//            LOGGER.info("Invoke Cost:" + (System.currentTimeMillis() - start)+" Interface=CallbackService?"+invoker.getInterface().equals(CallbackService.class));
         }
     }
 

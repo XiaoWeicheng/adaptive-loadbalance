@@ -59,11 +59,11 @@ public class UserLoadBalance implements LoadBalance {
             if (null == selectedInvoker) {
                 selectedInvoker = hosPortInvoker.get(
                         hostPortSet.stream().filter(hostPort -> !INVOKED.contains(hostPort)).findAny().orElse(null));
-            }
-            if (null == selectedInvoker) {
-                selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
-            } else {
-                LOGGER.info("随机轮询 {}", selectedInvoker.getUrl().getAddress());
+                if (null == selectedInvoker) {
+                    selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
+                }else {
+                    LOGGER.info("随机轮询 {}", selectedInvoker.getUrl().getAddress());
+                }
             }
             INVOKED.add(selectedInvoker.getUrl().getAddress());
             if (INVOKED.size() >= invokers.size()) {
@@ -72,7 +72,7 @@ public class UserLoadBalance implements LoadBalance {
             updateSelected(selectedInvoker.getUrl().getAddress());
             return selectedInvoker;
         } finally {
-            LOGGER.info("Select Invoker Cost:" + (System.currentTimeMillis() - start));
+//            LOGGER.info("Select Invoker Cost:" + (System.currentTimeMillis() - start));
         }
     }
 
@@ -110,15 +110,18 @@ public class UserLoadBalance implements LoadBalance {
         private String hostPort;
         private int threads;
         private int free;
+        private boolean status;
 
         Rank(String hostPort) {
             this.hostPort = hostPort;
+            status=true;
         }
 
         private void setThreads() {
             WRITE_LOCK.lock();
             threads -= free;
             free = 0;
+            status = false;
             WRITE_LOCK.unlock();
         }
 
@@ -131,6 +134,7 @@ public class UserLoadBalance implements LoadBalance {
         private void invoked() {
             WRITE_LOCK.lock();
             ++free;
+            status = true;
             WRITE_LOCK.unlock();
         }
 
@@ -172,6 +176,10 @@ public class UserLoadBalance implements LoadBalance {
                 }
                 if (null == o2) {
                     return -1;
+                }
+                int statusRes =Boolean.compare(o2.status,o1.status );
+                if(statusRes != 0){
+                    return statusRes;
                 }
                 int freeRes = Integer.compare(o2.free, o1.free);
                 if (freeRes != 0) {
