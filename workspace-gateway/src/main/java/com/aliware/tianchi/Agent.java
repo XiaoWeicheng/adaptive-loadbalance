@@ -20,6 +20,10 @@ public class Agent {
     private static final Logger LOGGER = LoggerFactory.getLogger(Agent.class);
     private static final String CLASS_NAME="com.aliware.tianchi.Test";
 
+    static {
+        System.out.println("动态注入初始化");
+    }
+
     public static void agentmain (String agentArgs, Instrumentation instrumentation){
         System.out.println("动态注入开始");
         ClassFileTransformer transformer = new ResponseCallbackClassFileTransformer();
