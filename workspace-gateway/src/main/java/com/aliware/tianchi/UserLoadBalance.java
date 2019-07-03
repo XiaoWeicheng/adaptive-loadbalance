@@ -30,61 +30,124 @@ public class UserLoadBalance implements LoadBalance {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(UserLoadBalance.class);
     private static final Map<String, Rank> RANK_MAP = new ConcurrentHashMap<>();
+    private static final Map<String, Boolean> STATUS_MAP = new ConcurrentHashMap<>();
     private static final Set<String> INVOKED = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final Lock LOCK = new ReentrantLock();
+
+    private static final SelectWay SELECT_WAY = SelectWay.DEFAULT;
     // private static final ReadWriteLock LOCK = new ReentrantReadWriteLock();
     // private static final Lock READ_LOCK=LOCK.readLock();
     // private static final Lock WRITE_LOCK=LOCK.writeLock();
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
-        long start = System.currentTimeMillis();
-        try {
-            Set<String> hostPortSet = new HashSet<>(invokers.size() + 1, 1);
-            Map<String, Invoker<T>> hosPortInvoker = new HashMap<>(invokers.size() + 1 + 1);
-            invokers.forEach(invoker -> {
-                String hostPort = invoker.getUrl().getAddress();
-                hosPortInvoker.put(hostPort, invoker);
-                hostPortSet.add(hostPort);
-            });
-            Invoker<T> selectedInvoker = null;
-//            LOGGER.info("排名 RANK_MAP={} hostPortSet={}", JsonUtil.toJson(RANK_MAP), JsonUtil.toJson(hostPortSet));
-            if (RANK_MAP.keySet().containsAll(hostPortSet)) {
-                LOCK.lock();
-                String hostPort = RANK_MAP.values().stream().min(Rank.comparator).map(Rank::getHostPort).orElse(null);
-                LOCK.unlock();
-                selectedInvoker = hosPortInvoker.get(hostPort);
-//                LOGGER.info("排名选择 {} selectedInvoker!=null?{}", hostPort, null != selectedInvoker);
+        switch (SELECT_WAY) {
+        case STATUS:
+            return selectByStatus(invokers);
+        case RANK:
+            return selectByRank(invokers);
+        case DEFAULT:
+        default:
+            return selectDefault(invokers);
+        }
+    }
+
+    private <T> Invoker<T> selectDefault(List<Invoker<T>> invokers) {
+        Invoker<T> selectedInvoker = invokers.stream()
+                .filter(invoker -> !INVOKED.contains(invoker.getUrl().getAddress())).findAny().orElse(null);
+        if (null == selectedInvoker) {
+            selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
+        }
+        INVOKED.add(selectedInvoker.getUrl().getAddress());
+        if (INVOKED.size() >= invokers.size()) {
+            INVOKED.clear();
+        }
+        return selectedInvoker;
+    }
+
+    private <T> Invoker<T> selectByStatus(List<Invoker<T>> invokers) {
+        for (Invoker<T> invoker : invokers) {
+            String hostPort = invoker.getUrl().getAddress();
+            Boolean status = STATUS_MAP.get(hostPort);
+            if (null == status || status) {
+                return invoker;
             }
+        }
+        Invoker<T> selectedInvoker = invokers.stream()
+                .filter(invoker -> !INVOKED.contains(invoker.getUrl().getAddress())).findAny().orElse(null);
+        if (null == selectedInvoker) {
+            selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
+        }
+        INVOKED.add(selectedInvoker.getUrl().getAddress());
+        if (INVOKED.size() >= invokers.size()) {
+            INVOKED.clear();
+        }
+        return selectedInvoker;
+    }
+
+    private <T> Invoker<T> selectByRank(List<Invoker<T>> invokers) {
+        Set<String> hostPortSet = new HashSet<>(invokers.size() + 1, 1);
+        Map<String, Invoker<T>> hosPortInvoker = new HashMap<>(invokers.size() + 1 + 1);
+        invokers.forEach(invoker -> {
+            String hostPort = invoker.getUrl().getAddress();
+            hosPortInvoker.put(hostPort, invoker);
+            hostPortSet.add(hostPort);
+        });
+        Invoker<T> selectedInvoker = null;
+        // LOGGER.info("排名 RANK_MAP={} hostPortSet={}", JsonUtil.toJson(RANK_MAP), JsonUtil.toJson(hostPortSet));
+        if (RANK_MAP.keySet().containsAll(hostPortSet)) {
+            LOCK.lock();
+            String hostPort = RANK_MAP.values().stream().min(Rank.comparator).map(Rank::getHostPort).orElse(null);
+            LOCK.unlock();
+            selectedInvoker = hosPortInvoker.get(hostPort);
+            // LOGGER.info("排名选择 {} selectedInvoker!=null?{}", hostPort, null != selectedInvoker);
+        }
+        if (null == selectedInvoker) {
+            selectedInvoker = hosPortInvoker
+                    .get(hostPortSet.stream().filter(hostPort -> !INVOKED.contains(hostPort)).findAny().orElse(null));
             if (null == selectedInvoker) {
-                selectedInvoker = hosPortInvoker.get(
-                        hostPortSet.stream().filter(hostPort -> !INVOKED.contains(hostPort)).findAny().orElse(null));
-                if (null == selectedInvoker) {
-                    selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
-                } /*else {
-                    LOGGER.info("随机轮询 {}", selectedInvoker.getUrl().getAddress());
-                }*/
-            }
+                selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
+            } /*
+               * else { LOGGER.info("随机轮询 {}", selectedInvoker.getUrl().getAddress()); }
+               */
             INVOKED.add(selectedInvoker.getUrl().getAddress());
             if (INVOKED.size() >= invokers.size()) {
                 INVOKED.clear();
             }
-            updateSelected(selectedInvoker.getUrl().getAddress());
-            return selectedInvoker;
-        } finally {
-            // LOGGER.info("Select Invoker Cost:" + (System.currentTimeMillis() - start));
         }
+        updateSelected(selectedInvoker.getUrl().getAddress());
+        return selectedInvoker;
     }
 
     static void updateException(Invoker invoker) {
-//        LOGGER.info("异常更新");
-        updateThreads(invoker.getUrl().getAddress());
-        updateInvoked(invoker.getUrl().getAddress());
+        // LOGGER.info("异常更新");
+        switch (SELECT_WAY) {
+        case STATUS:
+            updateStatus(invoker.getUrl().getAddress(), false);
+        case RANK:
+            updateThreads(invoker.getUrl().getAddress());
+            updateInvoked(invoker.getUrl().getAddress());
+            break;
+        case DEFAULT:
+        default:
+        }
     }
 
     static void updateInvoked(Invoker invoker) {
-//        LOGGER.info("调用完成更新");
-        updateInvoked(invoker.getUrl().getAddress());
+        // LOGGER.info("调用完成更新");
+        switch (SELECT_WAY) {
+        case STATUS:
+            updateStatus(invoker.getUrl().getAddress(), true);
+        case RANK:
+            updateInvoked(invoker.getUrl().getAddress());
+            break;
+        case DEFAULT:
+        default:
+        }
+    }
+
+    private static void updateStatus(String hostPort, boolean status) {
+        STATUS_MAP.put(hostPort, status);
     }
 
     private static void updateThreads(String hostPort) {
@@ -106,6 +169,21 @@ public class UserLoadBalance implements LoadBalance {
             RANK_MAP.put(hostPort, rank);
         }
         return rank;
+    }
+
+    public enum SelectWay {
+        /**
+         * 默认
+         */
+        DEFAULT,
+        /**
+         * 状态
+         */
+        STATUS,
+        /**
+         * 排名
+         */
+        RANK
     }
 
     public static class Rank {
