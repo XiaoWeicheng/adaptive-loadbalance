@@ -89,9 +89,9 @@ public class UserLoadBalance implements LoadBalance {
         Invoker<T> selectedInvoker = null;
         // LOGGER.info("排名 RANK_MAP={} hostPortSet={}", JsonUtil.toJson(RANK_MAP), JsonUtil.toJson(hostPortSet));
         if (RANK_MAP.keySet().containsAll(hostPortSet)) {
-            LOCK.lock();
+//            LOCK.lock();
             String hostPort = RANK_MAP.values().stream().min(Rank.comparator).map(Rank::getHostPort).orElse(null);
-            LOCK.unlock();
+//            LOCK.unlock();
             selectedInvoker = hosPortInvoker.get(hostPort);
             // LOGGER.info("排名选择 {} selectedInvoker!=null?{}", hostPort, null != selectedInvoker);
         }

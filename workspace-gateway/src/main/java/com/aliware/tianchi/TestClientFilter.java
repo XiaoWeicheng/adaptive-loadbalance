@@ -35,7 +35,7 @@ public class TestClientFilter implements Filter {
                 }
                 if (isAsync) {
                     AsyncRpcResult asyncRpcResult=(AsyncRpcResult)result;
-                    asyncRpcResult.getResultFuture().thenAcceptAsync(realResult -> {
+                    asyncRpcResult.getResultFuture().thenAccept(realResult -> {
                         if(realResult.hasException()){
                             updateException(invoker);
                         }
