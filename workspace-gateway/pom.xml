@@ -18,26 +18,4 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.1.2</version>
-                <configuration>
-                    <archive>
-                        <manifestEntries>
-                            <Main-Class>com.aliware.tianchi.Agent</Main-Class>
-                            <Agent-Class>com.aliware.tianchi.Agent</Agent-Class>
-                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
-                            <Can-Retransform-Classes>true</Can-Retransform-Classes>
-                        </manifestEntries>
-                    </archive>
-                    <classesDirectory>
-                    </classesDirectory>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-
 </project>

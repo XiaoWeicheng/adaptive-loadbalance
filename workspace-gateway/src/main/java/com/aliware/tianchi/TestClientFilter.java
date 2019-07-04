@@ -2,18 +2,14 @@ package com.aliware.tianchi;
 
 import org.apache.dubbo.common.Constants;
 import org.apache.dubbo.common.extension.Activate;
-import org.apache.dubbo.remoting.exchange.ResponseFuture;
+import org.apache.dubbo.rpc.AsyncRpcResult;
 import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.protocol.dubbo.FutureAdapter;
 import org.apache.dubbo.rpc.service.CallbackService;
 import org.apache.dubbo.rpc.support.RpcUtils;
-
-import java.util.concurrent.Future;
 
 import static com.aliware.tianchi.UserLoadBalance.updateException;
 import static com.aliware.tianchi.UserLoadBalance.updateInvoked;
@@ -38,12 +34,13 @@ public class TestClientFilter implements Filter {
                     updateInvoked(invoker);
                 }
                 if (isAsync) {
-                    RpcContext context = RpcContext.getContext();
-                    Future future = context.getFuture();
-                    if (future instanceof FutureAdapter) {
-                        ResponseFuture responseFuture = ((FutureAdapter) future).getFuture();
-                        context.setFuture(new FutureAdapterWrap<>(responseFuture, invoker));
-                    }
+                    AsyncRpcResult asyncRpcResult=(AsyncRpcResult)result;
+                    asyncRpcResult.getResultFuture().thenAccept(realResult -> {
+                        if(realResult.hasException()){
+                            updateException(invoker);
+                        }
+                        updateInvoked(invoker);
+                    });
                 } else {
                     updateInvoked(invoker);
                 }
