@@ -5,11 +5,13 @@ import org.apache.dubbo.config.ProtocolConfig;
 import org.apache.dubbo.config.context.ConfigManager;
 import org.apache.dubbo.remoting.exchange.Request;
 import org.apache.dubbo.remoting.transport.RequestLimiter;
+import org.apache.dubbo.rpc.Invocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * @author daofeng.xjf
@@ -20,7 +22,7 @@ public class TestRequestLimiter implements RequestLimiter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TestRequestLimiter.class);
 
-    private static volatile int CAN_ACCEPT = 0;
+    private static volatile long CAN_ACCEPT = 0;
     private static final AtomicInteger ACCEPTED = new AtomicInteger();
 
     /**
@@ -30,23 +32,13 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
-//        long start=System.currentTimeMillis();
-        try {
-            boolean ret = false;
-        int flag = ThreadLocalRandom.current().nextInt();
-        try {
-//            LOGGER.info("{}限流 CAN_ACCEPT={} ACCEPTED={}", flag, getCanAccept(), ACCEPTED.get());
-            if (ACCEPTED.get() < getCanAccept()) {
-                ACCEPTED.incrementAndGet();
-                ret = true;
-            }
-        } finally {
-//            LOGGER.info("{}限流 ret={}", flag, ret);
+        int timeout= Optional.ofNullable(((Invocation)request.getData())).map(invocation -> invocation.getAttachment("timeout")).map(Integer::parseInt).orElse(Constants.DEFAULT_TIMEOUT);
+
+        if (ACCEPTED.get() < getCanAccept()) {
+            ACCEPTED.incrementAndGet();
+            return true;
         }
-        return ret;
-        }finally {
-//            LOGGER.info("Try Acquire Cost:"+(System.currentTimeMillis()-start));
-        }
+        return false;
     }
 
     static void reduceAccepted() {
@@ -55,11 +47,11 @@ public class TestRequestLimiter implements RequestLimiter {
         }
     }
 
-    static int getCanAccept() {
+    static long getCanAccept() {
         if (0 == CAN_ACCEPT) {
             CAN_ACCEPT = ConfigManager.getInstance().getProtocols().values().stream()
                     .filter(protocolConfig -> Constants.DUBBO.equals(protocolConfig.getName()))
-                    .map(ProtocolConfig::getThreads).max(Integer::compareTo).orElse(0);
+                    .map(ProtocolConfig::getThreads).collect(Collectors.summarizingInt(value -> value)).getSum();
         }
         return CAN_ACCEPT;
     }

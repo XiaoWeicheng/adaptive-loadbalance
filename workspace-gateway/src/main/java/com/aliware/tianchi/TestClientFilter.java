@@ -7,6 +7,7 @@ import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
+import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.service.CallbackService;
 import org.apache.dubbo.rpc.support.RpcUtils;
@@ -28,15 +29,18 @@ public class TestClientFilter implements Filter {
         boolean isOneWay = RpcUtils.isOneway(invoker.getUrl(), invocation);
         boolean isCallBack = invoker.getInterface().equals(CallbackService.class);
         try {
+            RpcContext.getContext().setAttachment("timeout",
+                    String.valueOf(invoker.getUrl().getMethodParameter(RpcUtils.getMethodName(invocation),
+                            Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT)));
             Result result = invoker.invoke(invocation);
             if (!isCallBack) {
                 if (isOneWay) {
                     updateInvoked(invoker);
                 }
                 if (isAsync) {
-                    AsyncRpcResult asyncRpcResult=(AsyncRpcResult)result;
+                    AsyncRpcResult asyncRpcResult = (AsyncRpcResult) result;
                     asyncRpcResult.getResultFuture().thenAccept(realResult -> {
-                        if(realResult.hasException()){
+                        if (realResult.hasException()) {
                             updateException(invoker);
                         }
                         updateInvoked(invoker);
