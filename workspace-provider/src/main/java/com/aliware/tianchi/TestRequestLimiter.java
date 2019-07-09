@@ -9,9 +9,12 @@ import org.apache.dubbo.rpc.Invocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * @author daofeng.xjf
@@ -23,7 +26,9 @@ public class TestRequestLimiter implements RequestLimiter {
     private static final Logger LOGGER = LoggerFactory.getLogger(TestRequestLimiter.class);
 
     private static volatile long CAN_ACCEPT = 0;
-    private static final AtomicInteger ACCEPTED = new AtomicInteger();
+    private static final Set<String> PATHS = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final Map<String, AtomicInteger> ACCEPTED_MAP = new ConcurrentHashMap<>();
+    static final Map<String, Long> AVERAGE_ELAPSED_MAP = new ConcurrentHashMap<>();
 
     /**
      * @param request 服务请求
@@ -32,28 +37,54 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
-        int timeout= Optional.ofNullable(((Invocation)request.getData())).map(invocation -> invocation.getAttachment("timeout")).map(Integer::parseInt).orElse(Constants.DEFAULT_TIMEOUT);
-
-        if (ACCEPTED.get() < getCanAccept()) {
-            ACCEPTED.incrementAndGet();
-            return true;
+        Map<String, String> attachments = ((Invocation) request.getData()).getAttachments();
+        int timeout = Optional.ofNullable(attachments).map(map -> map.get("timeout")).map(Integer::parseInt)
+                .orElse(Constants.DEFAULT_TIMEOUT);
+        String path = Optional.ofNullable(attachments).map(map -> map.get("path")).orElse(null);
+        if (null != path) {
+            PATHS.add(path);
+            if (estimateElapsed(path) < timeout) {
+                incrementAccepted(path);
+                return true;
+            }
+            return false;
         }
-        return false;
+        return true;
     }
 
-    static void reduceAccepted() {
-        if (ACCEPTED.get() > 0) {
-            ACCEPTED.decrementAndGet();
-        }
+    private static long estimateElapsed(String path) {
+        long averageElapsed = AVERAGE_ELAPSED_MAP.get(path);
+        long rest = PATHS.stream().map(s -> Optional.ofNullable(ACCEPTED_MAP.get(s)).map(AtomicInteger::get).orElse(0)
+                * Optional.ofNullable(AVERAGE_ELAPSED_MAP.get(path)).orElse(0L)).reduce(0L, Math::addExact);
+        long estimateElapsed = averageElapsed + rest / getCanAccept();
+        LOGGER.info("预估耗时{}", estimateElapsed);
+        return estimateElapsed;
     }
 
     static long getCanAccept() {
         if (0 == CAN_ACCEPT) {
             CAN_ACCEPT = ConfigManager.getInstance().getProtocols().values().stream()
                     .filter(protocolConfig -> Constants.DUBBO.equals(protocolConfig.getName()))
-                    .map(ProtocolConfig::getThreads).collect(Collectors.summarizingInt(value -> value)).getSum();
+                    .map(ProtocolConfig::getThreads).reduce(0, Math::addExact);
         }
         return CAN_ACCEPT;
+    }
+
+    private static void incrementAccepted(String path) {
+        AtomicInteger accepted = ACCEPTED_MAP.get(path);
+        if (null == accepted) {
+            accepted = new AtomicInteger();
+            ACCEPTED_MAP.putIfAbsent(path, accepted);
+            accepted = ACCEPTED_MAP.get(path);
+        }
+        accepted.incrementAndGet();
+    }
+
+    static void decrementAccepted(String path) {
+        AtomicInteger accepted = ACCEPTED_MAP.get(path);
+        if (null != accepted) {
+            accepted.decrementAndGet();
+        }
     }
 
 }

@@ -7,10 +7,13 @@ import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.RpcStatus;
+import org.apache.dubbo.rpc.service.CallbackService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.aliware.tianchi.TestRequestLimiter.reduceAccepted;
+import static com.aliware.tianchi.TestRequestLimiter.AVERAGE_ELAPSED_MAP;
+import static com.aliware.tianchi.TestRequestLimiter.decrementAccepted;
 
 /**
  * @author daofeng.xjf
@@ -28,7 +31,12 @@ public class TestServerFilter implements Filter {
             Result result = invoker.invoke(invocation);
             return result;
         } finally {
-            reduceAccepted();
+            if (!invoker.getInterface().equals(CallbackService.class)) {
+                RpcStatus status = RpcStatus.getStatus(invoker.getUrl());
+                String path = invoker.getInterface().toString();
+                AVERAGE_ELAPSED_MAP.put(path, status.getAverageElapsed());
+                decrementAccepted(path);
+            }
         }
 
     }
