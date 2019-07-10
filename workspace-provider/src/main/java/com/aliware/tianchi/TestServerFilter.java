@@ -32,8 +32,8 @@ public class TestServerFilter implements Filter {
             return result;
         } finally {
             if (!invoker.getInterface().equals(CallbackService.class)) {
-                RpcStatus status = RpcStatus.getStatus(invoker.getUrl());
-                String path = invoker.getInterface().toString();
+                RpcStatus status = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName());
+                String path = invoker.getInterface().toString() + "#" + invocation.getMethodName();
                 AVERAGE_ELAPSED_MAP.put(path, status.getAverageElapsed());
                 decrementAccepted(path);
             }

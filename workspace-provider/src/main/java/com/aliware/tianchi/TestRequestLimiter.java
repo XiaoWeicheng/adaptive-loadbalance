@@ -37,10 +37,13 @@ public class TestRequestLimiter implements RequestLimiter {
      */
     @Override
     public boolean tryAcquire(Request request, int activeTaskCount) {
-        Map<String, String> attachments = ((Invocation) request.getData()).getAttachments();
+        Invocation invocation = (Invocation) request.getData();
+        Map<String, String> attachments = invocation.getAttachments();
+        String path = Optional.ofNullable(attachments).map(map -> map.get("path") + "#" + invocation.getMethodName())
+                .orElse(null);
         int timeout = Optional.ofNullable(attachments).map(map -> map.get("timeout")).map(Integer::parseInt)
                 .orElse(Constants.DEFAULT_TIMEOUT);
-        String path = Optional.ofNullable(attachments).map(map -> map.get("path")).orElse(null);
+        LOGGER.info("限流 timeout={} path={}", timeout, path);
         if (null != path) {
             PATHS.add(path);
             if (estimateElapsed(path) < timeout) {
@@ -53,7 +56,7 @@ public class TestRequestLimiter implements RequestLimiter {
     }
 
     private static long estimateElapsed(String path) {
-        long averageElapsed = AVERAGE_ELAPSED_MAP.get(path);
+        long averageElapsed = Optional.ofNullable(AVERAGE_ELAPSED_MAP.get(path)).orElse(0L);
         long rest = PATHS.stream().map(s -> Optional.ofNullable(ACCEPTED_MAP.get(s)).map(AtomicInteger::get).orElse(0)
                 * Optional.ofNullable(AVERAGE_ELAPSED_MAP.get(path)).orElse(0L)).reduce(0L, Math::addExact);
         long estimateElapsed = averageElapsed + rest / getCanAccept();
