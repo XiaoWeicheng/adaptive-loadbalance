@@ -35,24 +35,24 @@ public class TestClientFilter implements Filter {
             Result result = invoker.invoke(invocation);
             if (!isCallBack) {
                 if (isOneWay) {
-                    updateInvoked(invoker);
+                    updateInvoked(invoker, invocation);
                 }
                 if (isAsync) {
                     AsyncRpcResult asyncRpcResult = (AsyncRpcResult) result;
                     asyncRpcResult.getResultFuture().thenAccept(realResult -> {
                         if (realResult.hasException()) {
-                            updateException(invoker);
+                            updateException(invoker, invocation);
                         }
-                        updateInvoked(invoker);
+                        updateInvoked(invoker, invocation);
                     });
                 } else {
-                    updateInvoked(invoker);
+                    updateInvoked(invoker, invocation);
                 }
             }
             return result;
         } catch (Exception e) {
             if (!isCallBack) {
-                updateException(invoker);
+                updateException(invoker, invocation);
             }
             throw e;
         }

@@ -27,9 +27,15 @@ public class TestServerFilter implements Filter {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        long start = System.currentTimeMillis();
         try {
+            RpcStatus.beginCount(invoker.getUrl(), invocation.getMethodName());
             Result result = invoker.invoke(invocation);
+            RpcStatus.endCount(invoker.getUrl(), invocation.getMethodName(), System.currentTimeMillis() - start, true);
             return result;
+        } catch (Exception e) {
+            RpcStatus.endCount(invoker.getUrl(), invocation.getMethodName(), System.currentTimeMillis() - start, false);
+            return null;
         } finally {
             if (!invoker.getInterface().equals(CallbackService.class)) {
                 RpcStatus status = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName());
