@@ -12,7 +12,10 @@ import org.apache.dubbo.rpc.service.CallbackService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
+
 import static com.aliware.tianchi.TestRequestLimiter.AVERAGE_ELAPSED_MAP;
+import static com.aliware.tianchi.TestRequestLimiter.buildPath;
 import static com.aliware.tianchi.TestRequestLimiter.decrementAccepted;
 
 /**
@@ -28,18 +31,21 @@ public class TestServerFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
         long start = System.currentTimeMillis();
+        boolean success = false;
         try {
             RpcStatus.beginCount(invoker.getUrl(), invocation.getMethodName());
             Result result = invoker.invoke(invocation);
-            RpcStatus.endCount(invoker.getUrl(), invocation.getMethodName(), System.currentTimeMillis() - start, true);
+            success = true;
             return result;
         } catch (Exception e) {
-            RpcStatus.endCount(invoker.getUrl(), invocation.getMethodName(), System.currentTimeMillis() - start, false);
             return null;
         } finally {
+            RpcStatus.endCount(invoker.getUrl(), invocation.getMethodName(), System.currentTimeMillis() - start,
+                    success);
             if (!invoker.getInterface().equals(CallbackService.class)) {
                 RpcStatus status = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName());
-                String path = invoker.getInterface().toString() + "#" + invocation.getMethodName();
+                String path = buildPath(invoker.getInterface().getName(), invocation.getMethodName(),
+                        Arrays.toString(invocation.getParameterTypes()));
                 AVERAGE_ELAPSED_MAP.put(path, status.getAverageElapsed());
                 decrementAccepted(path);
             }

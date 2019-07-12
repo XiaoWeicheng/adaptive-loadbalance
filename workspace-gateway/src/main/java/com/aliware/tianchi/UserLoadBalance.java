@@ -99,6 +99,7 @@ public class UserLoadBalance implements LoadBalance {
 
         Set<Rank> rankSet = hostPortRank.values().stream().filter(rank -> hostPortSet.contains(rank.hostPort))
                 .collect(Collectors.toSet());
+        // LOGGER.info("rankSet={}", JsonUtil.toJson(rankSet));
         if (hostPortSet.size() == rankSet.size()) {
             String hostPort = rankSet.stream().min(Rank.comparator).map(Rank::getHostPort).orElse(null);
             selectedInvoker = hosPortInvoker.get(hostPort);
@@ -122,30 +123,30 @@ public class UserLoadBalance implements LoadBalance {
 
     static void updateException(Invoker invoker, Invocation invocation) {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), false);
-        LOCK.lock();
+        // LOCK.lock();
         URL url = invoker.getUrl();
         String path = url.getPath();
         String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
         String hostPort = url.getAddress();
         getRank(path, method, hostPort, 16).setThreads();
-        LOCK.unlock();
+        // LOCK.unlock();
     }
 
     static void updateInvoked(Invoker invoker, Invocation invocation) {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), true);
-        LOCK.lock();
+        // LOCK.lock();
         URL url = invoker.getUrl();
         String path = url.getPath();
         String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
         String hostPort = url.getAddress();
         getRank(path, method, hostPort, 16).invoked();
-        LOCK.unlock();
+        // LOCK.unlock();
     }
 
     private static void updateSelected(String path, String method, String hostPort, int size) {
-        LOCK.lock();
+        // LOCK.lock();
         getRank(path, method, hostPort, size).selected();
-        LOCK.unlock();
+        // LOCK.unlock();
     }
 
     private static Rank getRank(String path, String method, String hostPort, int size) {
@@ -166,7 +167,7 @@ public class UserLoadBalance implements LoadBalance {
         Rank rank = hostPortRankMap.get(hostPort);
         if (null == rank) {
             rank = new Rank(hostPort);
-            RANK_MAP.put(hostPort, rank);
+            hostPortRankMap.put(hostPort, rank);
         }
         return rank;
     }

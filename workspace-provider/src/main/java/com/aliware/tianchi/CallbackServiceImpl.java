@@ -3,7 +3,7 @@ package com.aliware.tianchi;
 import org.apache.dubbo.rpc.listener.CallbackListener;
 import org.apache.dubbo.rpc.service.CallbackService;
 
-import static com.aliware.tianchi.TestRequestLimiter.getCanAccept;
+import static com.aliware.tianchi.TestRequestLimiter.CAN_ACCEPT;
 
 /**
  * @author daofeng.xjf
@@ -14,6 +14,6 @@ public class CallbackServiceImpl implements CallbackService {
 
     @Override
     public void addListener(String key, CallbackListener listener) {
-        listener.receiveServerMsg(String.valueOf(getCanAccept()));
+        listener.receiveServerMsg(String.valueOf(CAN_ACCEPT));
     }
 }

@@ -9,6 +9,7 @@ import org.apache.dubbo.rpc.Invocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
@@ -25,10 +26,18 @@ public class TestRequestLimiter implements RequestLimiter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TestRequestLimiter.class);
 
-    private static volatile long CAN_ACCEPT = 0;
+    static volatile long CAN_ACCEPT = 0;
     private static final Set<String> PATHS = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final Map<String, AtomicInteger> ACCEPTED_MAP = new ConcurrentHashMap<>();
     static final Map<String, Long> AVERAGE_ELAPSED_MAP = new ConcurrentHashMap<>();
+
+    public TestRequestLimiter() {
+        if (0 == CAN_ACCEPT) {
+            CAN_ACCEPT = ConfigManager.getInstance().getProtocols().values().stream()
+                    .filter(protocolConfig -> Constants.DUBBO.equals(protocolConfig.getName()))
+                    .map(ProtocolConfig::getThreads).reduce(0, Math::addExact);
+        }
+    }
 
     /**
      * @param request 服务请求
@@ -39,8 +48,8 @@ public class TestRequestLimiter implements RequestLimiter {
     public boolean tryAcquire(Request request, int activeTaskCount) {
         Invocation invocation = (Invocation) request.getData();
         Map<String, String> attachments = invocation.getAttachments();
-        String path = Optional.ofNullable(attachments).map(map -> map.get("path") + "#" + invocation.getMethodName())
-                .orElse(null);
+        String path = Optional.ofNullable(attachments).map(map -> buildPath(map.get("path"), invocation.getMethodName(),
+                Arrays.toString(invocation.getParameterTypes()))).orElse(null);
         int timeout = Optional.ofNullable(attachments).map(map -> map.get("timeout")).map(Integer::parseInt)
                 .orElse(Constants.DEFAULT_TIMEOUT);
         LOGGER.info("限流 timeout={} path={}", timeout, path);
@@ -56,21 +65,15 @@ public class TestRequestLimiter implements RequestLimiter {
     }
 
     private static long estimateElapsed(String path) {
+        // LOGGER.info("path={} AVERAGE_ELAPSED_MAP={}", path,JsonUtil.toJson(AVERAGE_ELAPSED_MAP));
         long averageElapsed = Optional.ofNullable(AVERAGE_ELAPSED_MAP.get(path)).orElse(0L);
+        // LOGGER.info("averageElapsed={}", averageElapsed);
         long rest = PATHS.stream().map(s -> Optional.ofNullable(ACCEPTED_MAP.get(s)).map(AtomicInteger::get).orElse(0)
-                * Optional.ofNullable(AVERAGE_ELAPSED_MAP.get(path)).orElse(0L)).reduce(0L, Math::addExact);
-        long estimateElapsed = averageElapsed + rest / getCanAccept();
-        LOGGER.info("预估耗时{}", estimateElapsed);
+                * Optional.ofNullable(AVERAGE_ELAPSED_MAP.get(s)).orElse(0L)).reduce(0L, Math::addExact);
+        // LOGGER.info("averageElapsed={}", averageElapsed);
+        long estimateElapsed = averageElapsed + rest / CAN_ACCEPT;
+        LOGGER.info("预估耗时={}", estimateElapsed);
         return estimateElapsed;
-    }
-
-    static long getCanAccept() {
-        if (0 == CAN_ACCEPT) {
-            CAN_ACCEPT = ConfigManager.getInstance().getProtocols().values().stream()
-                    .filter(protocolConfig -> Constants.DUBBO.equals(protocolConfig.getName()))
-                    .map(ProtocolConfig::getThreads).reduce(0, Math::addExact);
-        }
-        return CAN_ACCEPT;
     }
 
     private static void incrementAccepted(String path) {
@@ -88,6 +91,10 @@ public class TestRequestLimiter implements RequestLimiter {
         if (null != accepted) {
             accepted.decrementAndGet();
         }
+    }
+
+    static String buildPath(String interfaceClass, String method, String paramTypes) {
+        return interfaceClass + "#" + method + ":" + paramTypes;
     }
 
 }
