@@ -48,6 +48,7 @@ public class TestServerFilter implements Filter {
                         Arrays.toString(invocation.getParameterTypes()));
                 AVERAGE_ELAPSED_MAP.put(path, status.getAverageElapsed());
                 decrementAccepted(path);
+                LOGGER.info("请求总数={}", status.getTotal());
             }
         }
 

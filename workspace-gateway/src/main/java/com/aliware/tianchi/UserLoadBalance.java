@@ -18,8 +18,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -101,7 +103,10 @@ public class UserLoadBalance implements LoadBalance {
                 .collect(Collectors.toSet());
         // LOGGER.info("rankSet={}", JsonUtil.toJson(rankSet));
         if (hostPortSet.size() == rankSet.size()) {
-            String hostPort = rankSet.stream().min(Rank.comparator).map(Rank::getHostPort).orElse(null);
+            rankSet = rankSet.stream().sorted(RANK_COMPARATOR).collect(Collectors.toCollection(TreeSet::new));
+            // LOGGER.info("RankSet={}", rankSet);
+            String hostPort = Optional.ofNullable(((TreeSet<Rank>) rankSet).first()).map(Rank::getHostPort)
+                    .orElse(null);
             selectedInvoker = hosPortInvoker.get(hostPort);
         }
 
@@ -123,30 +128,24 @@ public class UserLoadBalance implements LoadBalance {
 
     static void updateException(Invoker invoker, Invocation invocation) {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), false);
-        // LOCK.lock();
         URL url = invoker.getUrl();
         String path = url.getPath();
         String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
         String hostPort = url.getAddress();
-        getRank(path, method, hostPort, 16).setThreads();
-        // LOCK.unlock();
+        THREADS_SETTER.get(getRank(path, method, hostPort, 16));
     }
 
     static void updateInvoked(Invoker invoker, Invocation invocation) {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), true);
-        // LOCK.lock();
         URL url = invoker.getUrl();
         String path = url.getPath();
         String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
         String hostPort = url.getAddress();
-        getRank(path, method, hostPort, 16).invoked();
-        // LOCK.unlock();
+        CURRENT_REDUCER.get(getRank(path, method, hostPort, 16));
     }
 
     private static void updateSelected(String path, String method, String hostPort, int size) {
-        // LOCK.lock();
-        getRank(path, method, hostPort, size).selected();
-        // LOCK.unlock();
+        CURRENT_ADDER.get(getRank(path, method, hostPort, size));
     }
 
     private static Rank getRank(String path, String method, String hostPort, int size) {
@@ -172,41 +171,20 @@ public class UserLoadBalance implements LoadBalance {
         return rank;
     }
 
-    public static class Rank {
-        private static RankComparator comparator = new RankComparator();
-        private String hostPort;
-        private int threads = Integer.MAX_VALUE;
-        private int current;
-        private boolean status;
+    public static class Rank implements Comparable<Rank> {
+        private final String hostPort;
+        private volatile int threads = Integer.MAX_VALUE;
+        private volatile int current;
+        private volatile boolean status;
 
         Rank(String hostPort) {
             this.hostPort = hostPort;
             status = true;
         }
 
-        private void setThreads() {
-            LOCK.lock();
-            threads = current;
-            status = false;
-            LOCK.unlock();
-        }
-
-        private void selected() {
-            LOCK.lock();
-            ++current;
-            LOCK.unlock();
-        }
-
-        private void invoked() {
-            LOCK.lock();
-            --current;
-            status = true;
-            LOCK.unlock();
-        }
-
         @Override
         public String toString() {
-            return "(" + hostPort + ")(" + threads + ")(" + current + ")";
+            return "(hostPort=" + hostPort + ",threads=" + threads + ",current=" + current + ")";
         }
 
         @Override
@@ -230,34 +208,136 @@ public class UserLoadBalance implements LoadBalance {
             return hostPort;
         }
 
-        private static class RankComparator implements Comparator<Rank> {
-
-            private RankComparator() {
-            }
-
-            @Override
-            public int compare(Rank o1, Rank o2) {
-                if (null == o1) {
-                    return 1;
-                }
-                if (null == o2) {
-                    return -1;
-                }
-                int statusRes = Boolean.compare(o2.status, o1.status);
-                if (statusRes != 0) {
-                    return statusRes;
-                }
-                int freeRes = Integer.compare(o2.threads - o2.current, o1.threads - o1.current);
-                if (freeRes != 0) {
-                    return freeRes;
-                }
-                int threadsRes = Integer.compare(o2.threads, o1.threads);
-                if (0 != threadsRes) {
-                    return threadsRes;
-                }
-                return o1.hostPort.compareTo(o2.hostPort);
-            }
+        @Override
+        public int compareTo(Rank o) {
+            return RANK_COMPARATOR.compare(this, o);
         }
     }
+
+    private static final AtomicReferenceFieldUpdater<Rank, Integer> CURRENT_ADDER = new AtomicReferenceFieldUpdater<Rank, Integer>() {
+        @Override
+        public boolean compareAndSet(Rank obj, Integer expect, Integer update) {
+            ++obj.current;
+            return true;
+        }
+
+        @Override
+        public boolean weakCompareAndSet(Rank obj, Integer expect, Integer update) {
+            ++obj.current;
+            return true;
+        }
+
+        @Override
+        public void set(Rank obj, Integer newValue) {
+            ++obj.current;
+        }
+
+        @Override
+        public void lazySet(Rank obj, Integer newValue) {
+            ++obj.current;
+        }
+
+        @Override
+        public Integer get(Rank obj) {
+            return ++obj.current;
+        }
+    };
+    private static final AtomicReferenceFieldUpdater<Rank, Integer> CURRENT_REDUCER = new AtomicReferenceFieldUpdater<Rank, Integer>() {
+        @Override
+        public boolean compareAndSet(Rank obj, Integer expect, Integer update) {
+            obj.status = true;
+            --obj.current;
+            return true;
+        }
+
+        @Override
+        public boolean weakCompareAndSet(Rank obj, Integer expect, Integer update) {
+            obj.status = true;
+            --obj.current;
+            return true;
+        }
+
+        @Override
+        public void set(Rank obj, Integer newValue) {
+            obj.status = true;
+            --obj.current;
+        }
+
+        @Override
+        public void lazySet(Rank obj, Integer newValue) {
+            obj.status = true;
+            --obj.current;
+        }
+
+        @Override
+        public Integer get(Rank obj) {
+            obj.status = true;
+            return --obj.current;
+        }
+    };
+    private static final AtomicReferenceFieldUpdater<Rank, Integer> THREADS_SETTER = new AtomicReferenceFieldUpdater<Rank, Integer>() {
+        @Override
+        public boolean compareAndSet(Rank obj, Integer expect, Integer update) {
+            obj.status = false;
+            obj.threads = obj.current;
+            return true;
+        }
+
+        @Override
+        public boolean weakCompareAndSet(Rank obj, Integer expect, Integer update) {
+            obj.status = false;
+            obj.threads = obj.current;
+            return true;
+        }
+
+        @Override
+        public void set(Rank obj, Integer newValue) {
+            obj.status = false;
+            obj.threads = obj.current;
+        }
+
+        @Override
+        public void lazySet(Rank obj, Integer newValue) {
+            obj.status = false;
+            obj.threads = obj.current;
+        }
+
+        @Override
+        public Integer get(Rank obj) {
+            obj.status = false;
+            return obj.threads = obj.current;
+        }
+    };
+
+    private static class RankComparator implements Comparator<Rank> {
+
+        private RankComparator() {
+        }
+
+        @Override
+        public int compare(Rank o1, Rank o2) {
+            if (null == o1) {
+                return 1;
+            }
+            if (null == o2) {
+                return -1;
+            }
+            int statusRes = Boolean.compare(o2.status, o1.status);
+            if (statusRes != 0) {
+                return statusRes;
+            }
+            int freeRes = Integer.compare(o2.threads - o2.current, o1.threads - o1.current);
+            if (freeRes != 0) {
+                return freeRes;
+            }
+            int threadsRes = Integer.compare(o2.threads, o1.threads);
+            if (0 != threadsRes) {
+                return threadsRes;
+            }
+            return o1.hostPort.compareTo(o2.hostPort);
+        }
+    }
+
+    private static final RankComparator RANK_COMPARATOR = new RankComparator();
 
 }
