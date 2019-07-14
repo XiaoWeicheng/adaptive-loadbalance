@@ -2,12 +2,7 @@ package com.aliware.tianchi;
 
 import org.apache.dubbo.common.Constants;
 import org.apache.dubbo.common.extension.Activate;
-import org.apache.dubbo.rpc.Filter;
-import org.apache.dubbo.rpc.Invocation;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.RpcStatus;
+import org.apache.dubbo.rpc.*;
 import org.apache.dubbo.rpc.service.CallbackService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,8 +10,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 
 import static com.aliware.tianchi.TestRequestLimiter.AVERAGE_ELAPSED_MAP;
-import static com.aliware.tianchi.TestRequestLimiter.buildPath;
 import static com.aliware.tianchi.TestRequestLimiter.decrementAccepted;
+import static com.aliware.tianchi.pathUtil.buildPath;
 
 /**
  * @author daofeng.xjf
@@ -40,13 +35,15 @@ public class TestServerFilter implements Filter {
         } catch (Exception e) {
             return null;
         } finally {
-            RpcStatus.endCount(invoker.getUrl(), invocation.getMethodName(), System.currentTimeMillis() - start,
+            String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
+            RpcStatus.endCount(invoker.getUrl(), method, System.currentTimeMillis() - start,
                     success);
             if (!invoker.getInterface().equals(CallbackService.class)) {
-                RpcStatus status = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName());
+                RpcStatus status = RpcStatus.getStatus(invoker.getUrl(), method);
                 String path = buildPath(invoker.getInterface().getName(), invocation.getMethodName(),
                         Arrays.toString(invocation.getParameterTypes()));
-                AVERAGE_ELAPSED_MAP.put(path, status.getAverageElapsed());
+                long averageElapsed=status.getSucceededAverageElapsed();
+                AVERAGE_ELAPSED_MAP.put(path, averageElapsed);
                 decrementAccepted(path);
                 LOGGER.info("请求总数={}", status.getTotal());
             }

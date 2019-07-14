@@ -17,10 +17,12 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.aliware.tianchi.pathUtil.buildPath;
+
 /**
  * @author daofeng.xjf
- *         <p>
- *         服务端限流 可选接口 在提交给后端线程池之前的扩展，可以用于服务端控制拒绝请求
+ * <p>
+ * 服务端限流 可选接口 在提交给后端线程池之前的扩展，可以用于服务端控制拒绝请求
  */
 public class TestRequestLimiter implements RequestLimiter {
 
@@ -40,7 +42,7 @@ public class TestRequestLimiter implements RequestLimiter {
     }
 
     /**
-     * @param request 服务请求
+     * @param request         服务请求
      * @param activeTaskCount 服务端对应线程池的活跃线程数
      * @return false 不提交给服务端业务线程池直接返回，客户端可以在 Filter 中捕获 RpcException true 不限流
      */
@@ -91,10 +93,6 @@ public class TestRequestLimiter implements RequestLimiter {
         if (null != accepted) {
             accepted.decrementAndGet();
         }
-    }
-
-    static String buildPath(String interfaceClass, String method, String paramTypes) {
-        return interfaceClass + "#" + method + ":" + paramTypes;
     }
 
 }

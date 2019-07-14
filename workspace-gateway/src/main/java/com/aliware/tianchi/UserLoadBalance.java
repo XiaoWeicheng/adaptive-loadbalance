@@ -4,6 +4,7 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.RpcStatus;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,15 +22,18 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
+import static com.aliware.tianchi.pathUtil.buildMethod;
+
 /**
  * @author daofeng.xjf
- *
- *         负载均衡扩展接口 必选接口，核心接口 此类可以修改实现，不可以移动类或者修改包名 选手需要基于此类实现自己的负载均衡算法
+ * <p>
+ * 负载均衡扩展接口 必选接口，核心接口 此类可以修改实现，不可以移动类或者修改包名 选手需要基于此类实现自己的负载均衡算法
  */
 public class UserLoadBalance implements LoadBalance {
 
@@ -48,20 +52,6 @@ public class UserLoadBalance implements LoadBalance {
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
         // return selectByStatus(invokers);
         return selectByRank(invokers, url, invocation);
-        // return selectDefault(invokers);
-    }
-
-    private <T> Invoker<T> selectDefault(List<Invoker<T>> invokers) {
-        Invoker<T> selectedInvoker = invokers.stream()
-                .filter(invoker -> !INVOKED.contains(invoker.getUrl().getAddress())).findAny().orElse(null);
-        if (null == selectedInvoker) {
-            selectedInvoker = invokers.get(ThreadLocalRandom.current().nextInt(invokers.size()));
-        }
-        INVOKED.add(selectedInvoker.getUrl().getAddress());
-        if (INVOKED.size() >= invokers.size()) {
-            INVOKED.clear();
-        }
-        return selectedInvoker;
     }
 
     private <T> Invoker<T> selectByStatus(List<Invoker<T>> invokers) {
@@ -94,7 +84,7 @@ public class UserLoadBalance implements LoadBalance {
         });
 
         String path = url.getPath();
-        String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
+        String method = buildMethod(invocation.getMethodName(), Arrays.toString(invocation.getParameterTypes()));
 
         Map<String, Rank> hostPortRank = Optional.of(I_M_HOST_PORT_RANK_MAP).map(i -> i.get(path))
                 .map(m -> m.get(method)).orElse(Collections.emptyMap());
@@ -126,26 +116,36 @@ public class UserLoadBalance implements LoadBalance {
         return selectedInvoker;
     }
 
-    static void updateException(Invoker invoker, Invocation invocation) {
+    static void updateException(Invoker invoker, Invocation invocation, long start) {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), false);
         URL url = invoker.getUrl();
+        String method = buildMethod(invocation.getMethodName(), Arrays.toString(invocation.getParameterTypes()));
+        RpcStatus.endCount(url, method, System.currentTimeMillis() - start,
+                false);
         String path = url.getPath();
-        String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
         String hostPort = url.getAddress();
-        THREADS_SETTER.get(getRank(path, method, hostPort, 16));
+        MAX_SETTER.get(getRank(path, method, hostPort));
     }
 
-    static void updateInvoked(Invoker invoker, Invocation invocation) {
+    static void updateInvoked(Invoker invoker, Invocation invocation, long start) {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), true);
         URL url = invoker.getUrl();
+        String method = buildMethod(invocation.getMethodName(), Arrays.toString(invocation.getParameterTypes()));
+        RpcStatus.endCount(url, method, System.currentTimeMillis() - start,
+                true);
         String path = url.getPath();
-        String method = invocation.getMethodName() + Arrays.toString(invocation.getParameterTypes());
         String hostPort = url.getAddress();
-        CURRENT_REDUCER.get(getRank(path, method, hostPort, 16));
+        Rank rank = getRank(path, method, hostPort);
+        CURRENT_REDUCER.get(rank);
+        rank.averageElapsed = RpcStatus.getStatus(url, method).getSucceededAverageElapsed();
     }
 
     private static void updateSelected(String path, String method, String hostPort, int size) {
         CURRENT_ADDER.get(getRank(path, method, hostPort, size));
+    }
+
+    private static Rank getRank(String path, String method, String hostPort) {
+        return getRank(path, method, hostPort, 16);
     }
 
     private static Rank getRank(String path, String method, String hostPort, int size) {
@@ -173,8 +173,9 @@ public class UserLoadBalance implements LoadBalance {
 
     public static class Rank implements Comparable<Rank> {
         private final String hostPort;
-        private volatile int threads = Integer.MAX_VALUE;
-        private volatile int current;
+        private volatile long max = Long.MAX_VALUE;
+        private volatile long averageElapsed = 1;
+        private volatile long current;
         private volatile boolean status;
 
         Rank(String hostPort) {
@@ -184,7 +185,7 @@ public class UserLoadBalance implements LoadBalance {
 
         @Override
         public String toString() {
-            return "(hostPort=" + hostPort + ",threads=" + threads + ",current=" + current + ")";
+            return "(hostPort=" + hostPort + ",max=" + max + ",current=" + current + ")";
         }
 
         @Override
@@ -214,98 +215,98 @@ public class UserLoadBalance implements LoadBalance {
         }
     }
 
-    private static final AtomicReferenceFieldUpdater<Rank, Integer> CURRENT_ADDER = new AtomicReferenceFieldUpdater<Rank, Integer>() {
+    private static final AtomicReferenceFieldUpdater<Rank, Long> CURRENT_ADDER = new AtomicReferenceFieldUpdater<Rank, Long>() {
         @Override
-        public boolean compareAndSet(Rank obj, Integer expect, Integer update) {
+        public boolean compareAndSet(Rank obj, Long expect, Long update) {
             ++obj.current;
             return true;
         }
 
         @Override
-        public boolean weakCompareAndSet(Rank obj, Integer expect, Integer update) {
+        public boolean weakCompareAndSet(Rank obj, Long expect, Long update) {
             ++obj.current;
             return true;
         }
 
         @Override
-        public void set(Rank obj, Integer newValue) {
+        public void set(Rank obj, Long newValue) {
             ++obj.current;
         }
 
         @Override
-        public void lazySet(Rank obj, Integer newValue) {
+        public void lazySet(Rank obj, Long newValue) {
             ++obj.current;
         }
 
         @Override
-        public Integer get(Rank obj) {
+        public Long get(Rank obj) {
             return ++obj.current;
         }
     };
-    private static final AtomicReferenceFieldUpdater<Rank, Integer> CURRENT_REDUCER = new AtomicReferenceFieldUpdater<Rank, Integer>() {
+    private static final AtomicReferenceFieldUpdater<Rank, Long> CURRENT_REDUCER = new AtomicReferenceFieldUpdater<Rank, Long>() {
         @Override
-        public boolean compareAndSet(Rank obj, Integer expect, Integer update) {
+        public boolean compareAndSet(Rank obj, Long expect, Long update) {
             obj.status = true;
             --obj.current;
             return true;
         }
 
         @Override
-        public boolean weakCompareAndSet(Rank obj, Integer expect, Integer update) {
+        public boolean weakCompareAndSet(Rank obj, Long expect, Long update) {
             obj.status = true;
             --obj.current;
             return true;
         }
 
         @Override
-        public void set(Rank obj, Integer newValue) {
+        public void set(Rank obj, Long newValue) {
             obj.status = true;
             --obj.current;
         }
 
         @Override
-        public void lazySet(Rank obj, Integer newValue) {
+        public void lazySet(Rank obj, Long newValue) {
             obj.status = true;
             --obj.current;
         }
 
         @Override
-        public Integer get(Rank obj) {
+        public Long get(Rank obj) {
             obj.status = true;
             return --obj.current;
         }
     };
-    private static final AtomicReferenceFieldUpdater<Rank, Integer> THREADS_SETTER = new AtomicReferenceFieldUpdater<Rank, Integer>() {
+    private static final AtomicReferenceFieldUpdater<Rank, Long> MAX_SETTER = new AtomicReferenceFieldUpdater<Rank, Long>() {
         @Override
-        public boolean compareAndSet(Rank obj, Integer expect, Integer update) {
+        public boolean compareAndSet(Rank obj, Long expect, Long update) {
             obj.status = false;
-            obj.threads = obj.current;
+            obj.max = obj.current;
             return true;
         }
 
         @Override
-        public boolean weakCompareAndSet(Rank obj, Integer expect, Integer update) {
+        public boolean weakCompareAndSet(Rank obj, Long expect, Long update) {
             obj.status = false;
-            obj.threads = obj.current;
+            obj.max = obj.current;
             return true;
         }
 
         @Override
-        public void set(Rank obj, Integer newValue) {
+        public void set(Rank obj, Long newValue) {
             obj.status = false;
-            obj.threads = obj.current;
+            obj.max = obj.current;
         }
 
         @Override
-        public void lazySet(Rank obj, Integer newValue) {
+        public void lazySet(Rank obj, Long newValue) {
             obj.status = false;
-            obj.threads = obj.current;
+            obj.max = obj.current;
         }
 
         @Override
-        public Integer get(Rank obj) {
+        public Long get(Rank obj) {
             obj.status = false;
-            return obj.threads = obj.current;
+            return obj.max = obj.current;
         }
     };
 
@@ -326,11 +327,11 @@ public class UserLoadBalance implements LoadBalance {
             if (statusRes != 0) {
                 return statusRes;
             }
-            int freeRes = Integer.compare(o2.threads - o2.current, o1.threads - o1.current);
+            int freeRes = Long.compare((o2.max - o2.current) / o2.averageElapsed, (o1.max - o1.current) / o1.averageElapsed);
             if (freeRes != 0) {
                 return freeRes;
             }
-            int threadsRes = Integer.compare(o2.threads, o1.threads);
+            int threadsRes = Long.compare(o2.max, o1.max);
             if (0 != threadsRes) {
                 return threadsRes;
             }

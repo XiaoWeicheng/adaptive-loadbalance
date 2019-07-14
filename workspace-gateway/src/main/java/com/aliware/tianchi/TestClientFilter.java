@@ -2,13 +2,7 @@ package com.aliware.tianchi;
 
 import org.apache.dubbo.common.Constants;
 import org.apache.dubbo.common.extension.Activate;
-import org.apache.dubbo.rpc.AsyncRpcResult;
-import org.apache.dubbo.rpc.Filter;
-import org.apache.dubbo.rpc.Invocation;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.Result;
-import org.apache.dubbo.rpc.RpcContext;
-import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.*;
 import org.apache.dubbo.rpc.service.CallbackService;
 import org.apache.dubbo.rpc.support.RpcUtils;
 
@@ -25,34 +19,35 @@ public class TestClientFilter implements Filter {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        boolean isCallBack = invoker.getInterface().equals(CallbackService.class);
         boolean isAsync = RpcUtils.isAsync(invoker.getUrl(), invocation);
         boolean isOneWay = RpcUtils.isOneway(invoker.getUrl(), invocation);
-        boolean isCallBack = invoker.getInterface().equals(CallbackService.class);
+        long start = System.currentTimeMillis();
         try {
-            RpcContext.getContext().setAttachment("timeout",
-                    String.valueOf(invoker.getUrl().getMethodParameter(RpcUtils.getMethodName(invocation),
-                            Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT)));
+            if (!isCallBack) {
+                RpcContext.getContext().setAttachment("timeout",
+                        String.valueOf(invoker.getUrl().getMethodParameter(RpcUtils.getMethodName(invocation),
+                                Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT)));
+                RpcStatus.beginCount(invoker.getUrl(), invocation.getMethodName());
+            }
             Result result = invoker.invoke(invocation);
             if (!isCallBack) {
-                if (isOneWay) {
-                    updateInvoked(invoker, invocation);
-                }
-                if (isAsync) {
+                if (isAsync || !isOneWay) {
                     AsyncRpcResult asyncRpcResult = (AsyncRpcResult) result;
                     asyncRpcResult.getResultFuture().thenAccept(realResult -> {
                         if (realResult.hasException()) {
-                            updateException(invoker, invocation);
+                            updateException(invoker, invocation,start);
                         }
-                        updateInvoked(invoker, invocation);
+                        updateInvoked(invoker, invocation,start);
                     });
                 } else {
-                    updateInvoked(invoker, invocation);
+                    updateInvoked(invoker, invocation,start);
                 }
             }
             return result;
         } catch (Exception e) {
             if (!isCallBack) {
-                updateException(invoker, invocation);
+                updateException(invoker, invocation,start);
             }
             throw e;
         }
