@@ -22,10 +22,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static com.aliware.tianchi.pathUtil.buildMethod;
@@ -38,15 +35,9 @@ import static com.aliware.tianchi.pathUtil.buildMethod;
 public class UserLoadBalance implements LoadBalance {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(UserLoadBalance.class);
-    private static final Map<String, Rank> RANK_MAP = new ConcurrentHashMap<>();
     private static final Map<String, Map<String, Map<String, Rank>>> I_M_HOST_PORT_RANK_MAP = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> STATUS_MAP = new ConcurrentHashMap<>();
     private static final Set<String> INVOKED = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private static final Lock LOCK = new ReentrantLock();
-
-    // private static final ReadWriteLock LOCK = new ReentrantReadWriteLock();
-    // private static final Lock READ_LOCK=LOCK.readLock();
-    // private static final Lock WRITE_LOCK=LOCK.writeLock();
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
@@ -185,7 +176,7 @@ public class UserLoadBalance implements LoadBalance {
 
         @Override
         public String toString() {
-            return "(hostPort=" + hostPort + ",max=" + max + ",current=" + current + ")";
+            return JsonUtil.toJson(this);
         }
 
         @Override
@@ -281,6 +272,7 @@ public class UserLoadBalance implements LoadBalance {
         public boolean compareAndSet(Rank obj, Long expect, Long update) {
             obj.status = false;
             obj.max = obj.current;
+            --obj.current;
             return true;
         }
 
@@ -288,6 +280,7 @@ public class UserLoadBalance implements LoadBalance {
         public boolean weakCompareAndSet(Rank obj, Long expect, Long update) {
             obj.status = false;
             obj.max = obj.current;
+            --obj.current;
             return true;
         }
 
@@ -295,18 +288,21 @@ public class UserLoadBalance implements LoadBalance {
         public void set(Rank obj, Long newValue) {
             obj.status = false;
             obj.max = obj.current;
+            --obj.current;
         }
 
         @Override
         public void lazySet(Rank obj, Long newValue) {
             obj.status = false;
             obj.max = obj.current;
+            --obj.current;
         }
 
         @Override
         public Long get(Rank obj) {
             obj.status = false;
-            return obj.max = obj.current;
+            obj.max = obj.current;
+            return --obj.current;
         }
     };
 
