@@ -46,10 +46,8 @@ public class TestClientFilter implements Filter {
             }
             return result;
         } catch (Exception e) {
-            if (!isCallBack) {
-                if (isOneWay || !isAsync) {
-                    updateException(invoker, invocation, start);
-                }
+            if (!isCallBack && (isOneWay || !isAsync)) {
+                updateException(invoker, invocation, start);
             }
             throw e;
         }

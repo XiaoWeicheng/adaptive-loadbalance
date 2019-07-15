@@ -29,8 +29,8 @@ import static com.aliware.tianchi.pathUtil.buildMethod;
 
 /**
  * @author daofeng.xjf
- * <p>
- * 负载均衡扩展接口 必选接口，核心接口 此类可以修改实现，不可以移动类或者修改包名 选手需要基于此类实现自己的负载均衡算法
+ *         <p>
+ *         负载均衡扩展接口 必选接口，核心接口 此类可以修改实现，不可以移动类或者修改包名 选手需要基于此类实现自己的负载均衡算法
  */
 public class UserLoadBalance implements LoadBalance {
 
@@ -111,8 +111,7 @@ public class UserLoadBalance implements LoadBalance {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), false);
         URL url = invoker.getUrl();
         String method = buildMethod(invocation.getMethodName(), Arrays.toString(invocation.getParameterTypes()));
-        RpcStatus.endCount(url, method, System.currentTimeMillis() - start,
-                false);
+        RpcStatus.endCount(url, method, System.currentTimeMillis() - start, false);
         String path = url.getPath();
         String hostPort = url.getAddress();
         MAX_SETTER.get(getRank(path, method, hostPort));
@@ -122,8 +121,7 @@ public class UserLoadBalance implements LoadBalance {
         // STATUS_MAP.put(invoker.getUrl().getAddress(), true);
         URL url = invoker.getUrl();
         String method = buildMethod(invocation.getMethodName(), Arrays.toString(invocation.getParameterTypes()));
-        RpcStatus.endCount(url, method, System.currentTimeMillis() - start,
-                true);
+        RpcStatus.endCount(url, method, System.currentTimeMillis() - start, true);
         String path = url.getPath();
         String hostPort = url.getAddress();
         Rank rank = getRank(path, method, hostPort);
@@ -323,9 +321,13 @@ public class UserLoadBalance implements LoadBalance {
             if (statusRes != 0) {
                 return statusRes;
             }
-            int freeRes = Long.compare((o2.max - o2.current) / o2.averageElapsed, (o1.max - o1.current) / o1.averageElapsed);
+            int freeRes = Long.compare((o2.max - o2.current), (o1.max - o1.current));
             if (freeRes != 0) {
                 return freeRes;
+            }
+            int elapsedRes = Long.compare(o1.averageElapsed, o2.averageElapsed);
+            if (elapsedRes != 0) {
+                return elapsedRes;
             }
             int threadsRes = Long.compare(o2.max, o1.max);
             if (0 != threadsRes) {
