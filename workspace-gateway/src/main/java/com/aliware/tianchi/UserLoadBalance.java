@@ -321,13 +321,10 @@ public class UserLoadBalance implements LoadBalance {
             if (statusRes != 0) {
                 return statusRes;
             }
-            int freeRes = Long.compare((o2.max - o2.current), (o1.max - o1.current));
+            int freeRes = Double.compare((o2.max - o2.current) / (double) o2.averageElapsed,
+                    (o1.max - o1.current) / (double) o1.averageElapsed);
             if (freeRes != 0) {
                 return freeRes;
-            }
-            int elapsedRes = Long.compare(o1.averageElapsed, o2.averageElapsed);
-            if (elapsedRes != 0) {
-                return elapsedRes;
             }
             int threadsRes = Long.compare(o2.max, o1.max);
             if (0 != threadsRes) {
